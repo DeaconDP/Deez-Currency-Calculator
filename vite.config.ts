@@ -9,7 +9,11 @@ export default defineConfig({
         "favicon.ico",
         "apple-touch-icon.png",
         "icons/*.png",
+        "qr/*.png",
+        "qr/*.jpeg",
         "qr/*.svg",
+        "sprites/*.png",
+        "fonts/*.ttf",
       ],
       manifest: {
         name: "Deac's Currency Converter",
@@ -63,9 +67,15 @@ export default defineConfig({
     }),
   ],
   server: {
+    port: 5181,
+    strictPort: true,
     headers: {
       "Content-Security-Policy":
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.coinbase.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://api.coinbase.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
     },
+  },
+  preview: {
+    port: 4173,
+    strictPort: true,
   },
 });

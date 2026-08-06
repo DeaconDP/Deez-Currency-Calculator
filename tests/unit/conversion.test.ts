@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculate } from "../../src/conversion/calculate";
+import { calculate, calculateInverse } from "../../src/conversion/calculate";
 import { formatResult } from "../../src/conversion/format";
 import { parseAmount } from "../../src/conversion/parseAmount";
 import { getCurrency } from "../../src/data/currencies";
@@ -25,6 +25,12 @@ describe("calculation and formatting", () => {
     expect(calculate("0.1", "0.2")).toBe("0.02"));
   it("handles very small crypto values", () =>
     expect(calculate("0.00025", "59806.95199")).toBe("14.9517379975"));
+  it("uses exact decimal division for inverse", () =>
+    expect(calculateInverse("1", "0.0558")).toBe("17.92114695340501792115"));
+  it("inverse of forward recovers the source amount", () => {
+    const forward = calculate("2", "0.0558")!;
+    expect(calculateInverse(forward, "0.0558")).toBe("2");
+  });
   it("formats fiat without meaningless zeroes", () =>
     expect(formatResult("14.9500", getCurrency("USD")!)).toMatch(/^14[.,]95$/));
   it("formats crypto to eight decimals", () =>

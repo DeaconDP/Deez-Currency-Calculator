@@ -1,5 +1,6 @@
 export interface TipDestination {
   asset: string;
+  label: string;
   network: string;
   address: string;
   qrAssetPath: string;
@@ -7,14 +8,16 @@ export interface TipDestination {
 export const tipDestinations: TipDestination[] = [
   {
     asset: "Bitcoin",
+    label: "btc",
     network: "Bitcoin network",
     address: "REPLACE_WITH_BITCOIN_ADDRESS",
-    qrAssetPath: "/qr/bitcoin-placeholder.svg",
+    qrAssetPath: "/qr/btc.png",
   },
   {
     asset: "USD Coin",
+    label: "usdc",
     network: "Solana network",
     address: "REPLACE_WITH_SOLANA_USDC_ADDRESS",
-    qrAssetPath: "/qr/usdc-placeholder.svg",
+    qrAssetPath: "/qr/usdc.png",
   },
 ];

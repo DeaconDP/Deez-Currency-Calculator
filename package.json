@@ -7,6 +7,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "lint": "tsc --noEmit",
@@ -14,15 +17,18 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.11.1",
     "big.js": "^7.0.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.53.1",
+    "@tauri-apps/cli": "^2.11.4",
     "@types/big.js": "^6.2.2",
     "prettier": "^3.5.3",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vite-plugin-pwa": "^1.0.0",
-    "vitest": "^3.2.3"
+    "vitest": "^3.2.3",
+    "workbox-window": "^7.4.1"
   }
 }

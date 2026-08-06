@@ -3,6 +3,7 @@ node_modules/
 .vite/
 playwright-report/
 test-results/
+src-tauri/target/
 *.log
 .DS_Store
 Thumbs.db
