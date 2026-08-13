@@ -1,7 +1,7 @@
 # Deez Currency Calculator
 
 <p align="center">
-  <img src="https://cdn.jsdelivr.net/gh/DeaconDP/Deez-Currency-Calculator@main/docs/screenshots/hero.png" alt="Deez Currency Calculator" width="360" />
+  <img src="https://cdn.jsdelivr.net/gh/DeaconDP/Deez-Currency-Calculator@0e06d101824283dee3316222031a3ccbf12df64a/docs/screenshots/hero.png" alt="Deez Currency Calculator" width="360" />
 </p>
 
 Fiat and crypto converter in a compact black pixel-art shell — no login, no backend, no tracking.
@@ -41,7 +41,7 @@ Optional Desktop shortcut: `./run.command --shortcut` / `run.bat --shortcut`. Fo
 
 | Converter (100 ZAR) | Tip screen |
 |---------------------|------------|
-| <img src="https://cdn.jsdelivr.net/gh/DeaconDP/Deez-Currency-Calculator@main/docs/screenshots/01-main.png" alt="Main" width="240" /> | <img src="https://cdn.jsdelivr.net/gh/DeaconDP/Deez-Currency-Calculator@main/docs/screenshots/02-tips.png" alt="Tips" width="240" /> |
+| <img src="https://cdn.jsdelivr.net/gh/DeaconDP/Deez-Currency-Calculator@0e06d101824283dee3316222031a3ccbf12df64a/docs/screenshots/01-main.png" alt="Main" width="240" /> | <img src="https://cdn.jsdelivr.net/gh/DeaconDP/Deez-Currency-Calculator@0e06d101824283dee3316222031a3ccbf12df64a/docs/screenshots/02-tips.png" alt="Tips" width="240" /> |
 
 </details>
 
