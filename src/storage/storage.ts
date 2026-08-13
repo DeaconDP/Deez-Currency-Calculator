@@ -1,23 +1,42 @@
+import { getCurrency } from "../data/currencies";
 import type { Preferences, RateTable } from "../types";
 
 const PREFS_KEY = "deac-currency-preferences-v1";
 export const DEFAULT_PREFERENCES: Preferences = {
   amount: "1",
+  result: "",
   from: "ZAR",
   to: "USD",
+  source: "top",
 };
+
+function isSource(value: unknown): value is Preferences["source"] {
+  return value === "top" || value === "bottom";
+}
 
 export function loadPreferences(): Preferences {
   try {
     const value = JSON.parse(
       localStorage.getItem(PREFS_KEY) ?? "null",
     ) as Partial<Preferences> | null;
-    return value &&
-      typeof value.amount === "string" &&
-      typeof value.from === "string" &&
-      typeof value.to === "string"
-      ? { amount: value.amount, from: value.from, to: value.to }
-      : DEFAULT_PREFERENCES;
+    if (
+      !value ||
+      typeof value.amount !== "string" ||
+      typeof value.from !== "string" ||
+      typeof value.to !== "string"
+    ) {
+      return DEFAULT_PREFERENCES;
+    }
+    if (!getCurrency(value.from) || !getCurrency(value.to)) {
+      return DEFAULT_PREFERENCES;
+    }
+    return {
+      amount: value.amount,
+      result: typeof value.result === "string" ? value.result : "",
+      from: value.from,
+      to: value.to,
+      source: isSource(value.source) ? value.source : "top",
+    };
   } catch {
     return DEFAULT_PREFERENCES;
   }

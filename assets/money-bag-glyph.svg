@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Money-bag glyph only (no plate). 24�24 Lucide space for Deez-Iconz --svg. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none">
+  <!-- Cinched top -->
+  <path
+    fill="#ffffff"
+    stroke="none"
+    d="M7.2 2.8h9.6l-1.55 3.4H8.75L7.2 2.8z"
+  />
+  <!-- Bag body with center hole (evenodd) -->
+  <path
+    fill="#ffffff"
+    fill-rule="evenodd"
+    stroke="none"
+    d="M8.4 7.4h7.2c.55 0 1.15.35 1.55.95.85 1.25 2.05 3.55 2.05 6.15 0 3.7-2.45 6.7-5.4 6.7h-3.6c-2.95 0-5.4-3-5.4-6.7 0-2.6 1.2-4.9 2.05-6.15.4-.6 1-.95 1.55-.95zm3.6 4.35a1.35 1.35 0 1 0 0 2.7 1.35 1.35 0 0 0 0-2.7z"
+  />
+</svg>

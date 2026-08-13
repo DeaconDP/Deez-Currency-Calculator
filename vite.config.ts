@@ -16,9 +16,9 @@ export default defineConfig({
         "fonts/*.ttf",
       ],
       manifest: {
-        name: "Deac's Currency Converter",
-        short_name: "Converter",
-        description: "A fast fiat and cryptocurrency converter.",
+        name: "Deez Currency Calculator",
+        short_name: "Calculator",
+        description: "A fast fiat and cryptocurrency calculator.",
         start_url: "/",
         display: "standalone",
         background_color: "#000000",
@@ -67,6 +67,7 @@ export default defineConfig({
     }),
   ],
   server: {
+    host: "127.0.0.1",
     port: 5181,
     strictPort: true,
     headers: {
@@ -75,6 +76,7 @@ export default defineConfig({
     },
   },
   preview: {
+    host: "127.0.0.1",
     port: 4173,
     strictPort: true,
   },

@@ -14,7 +14,16 @@ import {
   savePreferences,
   setCachedRates,
 } from "./storage/storage";
-import type { AppStatus, RateTable } from "./types";
+import {
+  DEFAULT_DESIGN_THEME,
+  NAMED_PRESETS,
+  applyTheme,
+  getPresetTheme,
+  loadDesignTheme,
+  saveDesignTheme,
+  themeWithCustomFlag,
+} from "./theme/theme";
+import type { AppStatus, DesignTheme, RateTable } from "./types";
 
 declare global {
   interface BeforeInstallPromptEvent extends Event {
@@ -30,6 +39,8 @@ const isTauri = Boolean(window.__TAURI_INTERNALS__ || window.__TAURI__);
 
 const provider = new CoinbaseProvider();
 const prefs = loadPreferences();
+let designTheme = loadDesignTheme();
+applyTheme(designTheme);
 let table: RateTable | null = null;
 let status: AppStatus = "loading";
 let lastError = "None";
@@ -37,7 +48,7 @@ let requestDuration: number | null = null;
 let abortController: AbortController | null = null;
 let deferredInstall: BeforeInstallPromptEvent | null = null;
 let debugOpen = false;
-let source: "top" | "bottom" = "top";
+let source: "top" | "bottom" = prefs.source;
 const logs: string[] = [];
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -62,14 +73,55 @@ const tipCards = tipDestinations
   )
   .join("");
 
+type ColorKey =
+  | "background"
+  | "surface"
+  | "control"
+  | "controlText"
+  | "text"
+  | "muted"
+  | "money"
+  | "error"
+  | "focus";
+
+const colorFields: { key: ColorKey; label: string; id: string }[] = [
+  { key: "background", label: "Background", id: "design-background" },
+  { key: "surface", label: "Surface", id: "design-surface" },
+  { key: "control", label: "Controls", id: "design-control" },
+  { key: "controlText", label: "Control text", id: "design-control-text" },
+  { key: "text", label: "Text", id: "design-text" },
+  { key: "muted", label: "Muted", id: "design-muted" },
+  { key: "money", label: "Accent", id: "design-money" },
+  { key: "error", label: "Error", id: "design-error" },
+  { key: "focus", label: "Focus", id: "design-focus" },
+];
+
+const colorFieldMarkup = colorFields
+  .map(
+    ({ key, label, id }) => `
+      <div class="design-field">
+        <label for="${id}">${label}</label>
+        <div class="design-color-row">
+          <input id="${id}" type="color" value="${designTheme[key]}" data-theme-key="${key}" aria-label="${label} color">
+          <input id="${id}-hex" type="text" value="${designTheme[key]}" maxlength="7" spellcheck="false" data-theme-hex="${key}" aria-label="${label} hex">
+        </div>
+      </div>`,
+  )
+  .join("");
+
+const presetMarkup = NAMED_PRESETS.map(
+  (id) =>
+    `<button type="button" class="design-preset" data-preset="${id}" aria-pressed="${designTheme.presetId === id}">${id.replace("-", " ").toUpperCase()}</button>`,
+).join("");
+
 app.innerHTML = `
   <main class="shell">
-    <header class="brand" aria-label="Deac's Currency Converter">
-      <h1><span>DEAC'S</span><span>CURRENCY</span><span>CONVERTER</span></h1>
+    <header class="brand" aria-label="Deez Currency Calculator">
+      <h1><span>DEEZ</span><span>CURRENCY</span><span>CALCULATOR</span></h1>
       <img class="brand-mark" src="/sprites/money-bag.png" alt="" width="96" height="80">
     </header>
     <section class="converter" aria-labelledby="converter-title">
-      <h2 id="converter-title" class="sr-only">Currency converter</h2>
+      <h2 id="converter-title" class="sr-only">Currency calculator</h2>
       <div class="conversion-grid">
         <div class="row">
           <div class="field amount-field">
@@ -84,13 +136,22 @@ app.innerHTML = `
         </div>
         <div class="swap-row">
           <button id="swap" class="swap" type="button" aria-label="Swap ${prefs.from} and ${prefs.to}" title="Swap currencies">
-            <span aria-hidden="true">⇅</span>
+            <svg class="swap-icon" viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" shape-rendering="crispEdges">
+              <!-- left arrow up -->
+              <rect x="4" y="1" width="2" height="2"/>
+              <rect x="2" y="3" width="6" height="2"/>
+              <rect x="4" y="5" width="2" height="10"/>
+              <!-- right arrow down -->
+              <rect x="10" y="1" width="2" height="10"/>
+              <rect x="8" y="11" width="6" height="2"/>
+              <rect x="10" y="13" width="2" height="2"/>
+            </svg>
           </button>
         </div>
         <div class="row">
           <div class="field amount-field">
             <label class="sr-only" for="result">Converted amount</label>
-            <input id="result" inputmode="decimal" autocomplete="off" aria-live="polite" aria-describedby="result-error" value="">
+            <input id="result" inputmode="decimal" autocomplete="off" aria-live="polite" aria-describedby="result-error" value="${prefs.result}">
             <span id="result-error" class="error"></span>
           </div>
           <div class="field currency-field">
@@ -109,6 +170,21 @@ app.innerHTML = `
       <button id="tip-open" class="action tip" type="button">
         <img src="/sprites/tip-heart.png" alt="" width="40" height="34">
         <span>TIP</span>
+      </button>
+      <button id="design-open" class="action settings" type="button" aria-label="Design settings" aria-haspopup="dialog" aria-controls="design-dialog">
+        <span class="action-glyph" aria-hidden="true">
+          <svg class="settings-icon" viewBox="0 0 16 16" width="40" height="34" shape-rendering="crispEdges">
+            <!-- left arrow up -->
+            <rect x="4" y="1" width="2" height="2"/>
+            <rect x="2" y="3" width="6" height="2"/>
+            <rect x="4" y="5" width="2" height="10"/>
+            <!-- right arrow down -->
+            <rect x="10" y="1" width="2" height="10"/>
+            <rect x="8" y="11" width="6" height="2"/>
+            <rect x="10" y="13" width="2" height="2"/>
+          </svg>
+        </span>
+        <span>SETTINGS</span>
       </button>
     </nav>
     <section
@@ -138,6 +214,54 @@ app.innerHTML = `
       <div class="tip-qr-well">${tipCards}</div>
     </div>
   </dialog>
+  <dialog id="design-dialog" class="design-dialog" aria-labelledby="design-title">
+    <button class="close design-close" type="button" aria-label="Close design settings">×</button>
+    <div class="design-body">
+      <h2 id="design-title" class="design-title">DESIGN</h2>
+      <p class="design-hint">Pick a look, or open a section to tweak colors, type, and spacing.</p>
+      <div class="design-presets" role="group" aria-label="Design presets">${presetMarkup}</div>
+      <button id="design-reset" class="design-reset" type="button">Reset to default</button>
+      <details class="design-section">
+        <summary>Colors</summary>
+        <div class="design-fields">${colorFieldMarkup}</div>
+      </details>
+      <details class="design-section">
+        <summary>Type</summary>
+        <div class="design-fields">
+          <div class="design-field">
+            <label for="design-ui-scale">Size <span id="design-ui-scale-value" class="design-range-value">${Math.round(designTheme.uiScale * 100)}%</span></label>
+            <input id="design-ui-scale" type="range" min="0.75" max="1.4" step="0.05" value="${designTheme.uiScale}">
+          </div>
+          <div class="design-toggle-row">
+            <span id="design-pixel-label">Pixel font</span>
+            <button id="design-pixel-font" class="design-toggle" type="button" role="switch" aria-checked="${designTheme.font === "pixel"}" aria-labelledby="design-pixel-label"></button>
+          </div>
+        </div>
+      </details>
+      <details class="design-section">
+        <summary>Shape</summary>
+        <div class="design-fields">
+          <div class="design-field">
+            <label for="design-radius">Corners <span id="design-radius-value" class="design-range-value">${designTheme.radius}px</span></label>
+            <input id="design-radius" type="range" min="0" max="24" step="1" value="${designTheme.radius}">
+          </div>
+        </div>
+      </details>
+      <details class="design-section">
+        <summary>Density</summary>
+        <div class="design-fields">
+          <div class="design-field">
+            <label for="design-space">Spacing <span id="design-space-value" class="design-range-value">${Math.round(designTheme.space * 100)}%</span></label>
+            <input id="design-space" type="range" min="0.6" max="1.4" step="0.05" value="${designTheme.space}">
+          </div>
+          <div class="design-field">
+            <label for="design-control-height">Control height <span id="design-control-height-value" class="design-range-value">${designTheme.controlHeight}px</span></label>
+            <input id="design-control-height" type="range" min="40" max="64" step="2" value="${designTheme.controlHeight}">
+          </div>
+        </div>
+      </details>
+    </div>
+  </dialog>
   <aside id="update-toast" hidden>A new version is available. <button id="update-app" type="button">Update</button></aside>`;
 
 const amount = byId<HTMLInputElement>("amount");
@@ -147,6 +271,9 @@ const to = byId<HTMLSelectElement>("to");
 const debugPanel = byId("debug-panel");
 const debugButton = byId<HTMLButtonElement>("debug-open");
 const tipDialog = byId<HTMLDialogElement>("tip-dialog");
+const designDialog = byId<HTMLDialogElement>("design-dialog");
+const designOpen = byId<HTMLButtonElement>("design-open");
+const pixelFontToggle = byId<HTMLButtonElement>("design-pixel-font");
 
 function byId<T extends HTMLElement>(id: string) {
   return document.getElementById(id) as T;
@@ -157,7 +284,13 @@ function log(message: string) {
   renderDebug();
 }
 function save() {
-  savePreferences({ amount: amount.value, from: from.value, to: to.value });
+  savePreferences({
+    amount: amount.value,
+    result: result.value,
+    from: from.value,
+    to: to.value,
+    source,
+  });
 }
 
 function setDebugOpen(open: boolean) {
@@ -224,11 +357,7 @@ async function loadRates(force = false) {
     log(`Loaded cached ${cached.base} rates`);
     renderConversion();
   }
-  if (!navigator.onLine) {
-    status = "offline";
-    renderConversion();
-    return;
-  }
+  // navigator.onLine is a hint only — always attempt the network when needed.
   if (!force && cached && isFresh(cached.fetchedAt)) return;
   const started = performance.now();
   status = table ? "refreshing" : "loading";
@@ -253,7 +382,8 @@ async function loadRates(force = false) {
       error instanceof Error
         ? error.message
         : "Rates are temporarily unavailable.";
-    status = table ? "stale" : "error";
+    if (table) status = "stale";
+    else status = navigator.onLine ? "error" : "offline";
     log(lastError);
   }
   renderConversion();
@@ -290,19 +420,185 @@ byId("swap").addEventListener("click", () => {
 
 debugButton.addEventListener("click", () => setDebugOpen(!debugOpen));
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && debugOpen && !tipDialog.open) {
+  if (
+    event.key === "Escape" &&
+    debugOpen &&
+    !tipDialog.open &&
+    !designDialog.open
+  ) {
     setDebugOpen(false);
   }
 });
-byId("tip-open").addEventListener("click", () => {
+let tipClosing = false;
+
+function focusTipClose() {
+  const closeBtn = tipDialog.querySelector<HTMLElement>(".close");
+  if (!closeBtn) return;
+  try {
+    closeBtn.focus({
+      preventScroll: true,
+      focusVisible: false,
+    } as FocusOptions);
+  } catch {
+    closeBtn.focus({ preventScroll: true });
+  }
+}
+
+function openTipDialog() {
+  tipClosing = false;
+  tipDialog.classList.remove("is-closing");
   tipDialog.showModal();
-  tipDialog.querySelector<HTMLElement>(".close")?.focus();
-});
-tipDialog.querySelector<HTMLButtonElement>(".close")?.addEventListener("click", () =>
-  tipDialog.close(),
+  focusTipClose();
+}
+
+function closeTipDialog() {
+  if (!tipDialog.open || tipClosing) return;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)")
+    .matches;
+  if (reduceMotion) {
+    tipDialog.classList.remove("is-closing");
+    tipDialog.close();
+    return;
+  }
+  tipClosing = true;
+  tipDialog.classList.add("is-closing");
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    tipDialog.close();
+    tipDialog.classList.remove("is-closing");
+    tipClosing = false;
+  };
+  tipDialog.addEventListener("animationend", (event) => {
+    if (event.target === tipDialog) finish();
+  }, { once: true });
+  window.setTimeout(finish, 280);
+}
+
+byId("tip-open").addEventListener("click", () => openTipDialog());
+tipDialog.querySelector<HTMLButtonElement>(".close")?.addEventListener(
+  "click",
+  () => closeTipDialog(),
 );
 tipDialog.addEventListener("click", (event) => {
-  if (event.target === tipDialog) tipDialog.close();
+  if (event.target === tipDialog) closeTipDialog();
+});
+tipDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeTipDialog();
+});
+
+function commitTheme(next: DesignTheme) {
+  designTheme = themeWithCustomFlag(next);
+  applyTheme(designTheme);
+  saveDesignTheme(designTheme);
+  syncDesignControls();
+}
+
+function syncDesignControls() {
+  for (const { key, id } of colorFields) {
+    const color = designTheme[key];
+    const picker = byId<HTMLInputElement>(id);
+    const hex = byId<HTMLInputElement>(`${id}-hex`);
+    picker.value = color;
+    hex.value = color;
+  }
+  byId<HTMLInputElement>("design-ui-scale").value = String(designTheme.uiScale);
+  byId("design-ui-scale-value").textContent =
+    `${Math.round(designTheme.uiScale * 100)}%`;
+  byId<HTMLInputElement>("design-radius").value = String(designTheme.radius);
+  byId("design-radius-value").textContent = `${designTheme.radius}px`;
+  byId<HTMLInputElement>("design-space").value = String(designTheme.space);
+  byId("design-space-value").textContent =
+    `${Math.round(designTheme.space * 100)}%`;
+  byId<HTMLInputElement>("design-control-height").value = String(
+    designTheme.controlHeight,
+  );
+  byId("design-control-height-value").textContent =
+    `${designTheme.controlHeight}px`;
+  pixelFontToggle.setAttribute(
+    "aria-checked",
+    String(designTheme.font === "pixel"),
+  );
+  designDialog.querySelectorAll<HTMLButtonElement>("[data-preset]").forEach((btn) => {
+    btn.setAttribute(
+      "aria-pressed",
+      String(btn.dataset.preset === designTheme.presetId),
+    );
+  });
+}
+
+designOpen.addEventListener("click", () => {
+  setDebugOpen(false);
+  syncDesignControls();
+  designDialog.showModal();
+  designDialog.querySelector<HTMLElement>(".close")?.focus();
+});
+designDialog.querySelector<HTMLButtonElement>(".close")?.addEventListener(
+  "click",
+  () => designDialog.close(),
+);
+designDialog.addEventListener("click", (event) => {
+  if (event.target === designDialog) designDialog.close();
+});
+
+designDialog.querySelectorAll<HTMLButtonElement>("[data-preset]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const id = btn.dataset.preset;
+    if (!id || id === "custom") return;
+    commitTheme(
+      getPresetTheme(id as Exclude<DesignTheme["presetId"], "custom">),
+    );
+  });
+});
+
+byId("design-reset").addEventListener("click", () => {
+  commitTheme({ ...DEFAULT_DESIGN_THEME });
+});
+
+for (const { key, id } of colorFields) {
+  byId<HTMLInputElement>(id).addEventListener("input", (event) => {
+    const value = (event.target as HTMLInputElement).value;
+    commitTheme({ ...designTheme, [key]: value, presetId: "custom" });
+  });
+  byId<HTMLInputElement>(`${id}-hex`).addEventListener("change", (event) => {
+    let value = (event.target as HTMLInputElement).value.trim();
+    if (!value.startsWith("#")) value = `#${value}`;
+    if (!/^#[0-9a-fA-F]{6}$/.test(value)) {
+      (event.target as HTMLInputElement).value = designTheme[key];
+      return;
+    }
+    commitTheme({
+      ...designTheme,
+      [key]: value.toLowerCase(),
+      presetId: "custom",
+    });
+  });
+}
+
+byId<HTMLInputElement>("design-ui-scale").addEventListener("input", (event) => {
+  const uiScale = Number((event.target as HTMLInputElement).value);
+  commitTheme({ ...designTheme, uiScale, presetId: "custom" });
+});
+byId<HTMLInputElement>("design-radius").addEventListener("input", (event) => {
+  const radius = Number((event.target as HTMLInputElement).value);
+  commitTheme({ ...designTheme, radius, presetId: "custom" });
+});
+byId<HTMLInputElement>("design-space").addEventListener("input", (event) => {
+  const space = Number((event.target as HTMLInputElement).value);
+  commitTheme({ ...designTheme, space, presetId: "custom" });
+});
+byId<HTMLInputElement>("design-control-height").addEventListener(
+  "input",
+  (event) => {
+    const controlHeight = Number((event.target as HTMLInputElement).value);
+    commitTheme({ ...designTheme, controlHeight, presetId: "custom" });
+  },
+);
+pixelFontToggle.addEventListener("click", () => {
+  const font = designTheme.font === "pixel" ? "system" : "pixel";
+  commitTheme({ ...designTheme, font, presetId: "custom" });
 });
 
 async function copyText(text: string) {

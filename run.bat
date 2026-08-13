@@ -1,30 +1,27 @@
 @echo off
 cd /d "%~dp0"
 
-where node >nul 2>&1 || (echo Node.js required. & pause & exit /b 1)
-where pnpm >nul 2>&1 || (echo pnpm required. Install with: npm i -g pnpm & pause & exit /b 1)
-where rustc >nul 2>&1 || (echo Rust required. Install from https://rustup.rs & pause & exit /b 1)
-where cargo >nul 2>&1 || (echo Cargo required. Install from https://rustup.rs & pause & exit /b 1)
-
-if not exist node_modules (
-  echo Installing JavaScript dependencies...
-  call pnpm install || (pause & exit /b 1)
+if /I "%~1"=="--shortcut" (
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\create-desktop-shortcut.ps1"
+  if errorlevel 1 (
+    echo.
+    echo Failed to create desktop shortcut.
+    pause
+    exit /b 1
+  )
+  echo.
+  pause
+  exit /b 0
 )
 
-REM Free sticky Vite port 5181 if this project's leftover node still holds it.
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5181" ^| findstr "LISTENING"') do (
-  set "PORT_PID=%%a"
-)
-if defined PORT_PID (
-  echo Freeing sticky port 5181 ^(PID %PORT_PID%^)...
-  taskkill /PID %PORT_PID% /F >nul 2>&1
-)
+set "LAUNCH_ARGS="
+if /I "%~1"=="--rebuild" set "LAUNCH_ARGS=-Rebuild"
+if /I "%~1"=="-Rebuild" set "LAUNCH_ARGS=-Rebuild"
 
-echo Starting Deez Currency Calculator (Tauri)...
-call pnpm tauri:dev
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\launch-release.ps1" %LAUNCH_ARGS%
 if errorlevel 1 (
-  echo App failed to start.
+  echo.
+  echo Deez Currency Calculator failed to launch.
   pause
   exit /b 1
 )
-pause

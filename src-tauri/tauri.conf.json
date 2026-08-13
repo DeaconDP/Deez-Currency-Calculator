@@ -5,7 +5,7 @@
   "identifier": "online.deac.currency-calculator",
   "build": {
     "beforeDevCommand": "pnpm dev",
-    "devUrl": "http://localhost:5181",
+    "devUrl": "http://127.0.0.1:5181",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
@@ -28,7 +28,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg", "nsis", "msi"],
+    "targets": ["app", "nsis", "msi"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
