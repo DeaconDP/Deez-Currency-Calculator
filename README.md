@@ -1,6 +1,8 @@
 # Deez Currency Calculator
 
-![Deez Currency Calculator — convert ZAR to USD](docs/screenshots/hero.png)
+<p align="center">
+  <img src="https://cdn.jsdelivr.net/gh/DeaconDP/Deez-Currency-Calculator@main/docs/screenshots/hero.png" alt="Deez Currency Calculator" width="360" />
+</p>
 
 Fiat and crypto converter in a compact black pixel-art shell — no login, no backend, no tracking.
 
@@ -39,7 +41,7 @@ Optional Desktop shortcut: `./run.command --shortcut` / `run.bat --shortcut`. Fo
 
 | Converter (100 ZAR) | Tip screen |
 |---------------------|------------|
-| ![Main](docs/screenshots/01-main.png) | ![Tips](docs/screenshots/02-tips.png) |
+| <img src="https://cdn.jsdelivr.net/gh/DeaconDP/Deez-Currency-Calculator@main/docs/screenshots/01-main.png" alt="Main" width="240" /> | <img src="https://cdn.jsdelivr.net/gh/DeaconDP/Deez-Currency-Calculator@main/docs/screenshots/02-tips.png" alt="Tips" width="240" /> |
 
 </details>
 
