@@ -26,6 +26,39 @@ export interface Preferences {
   from: string;
   to: string;
   source: "top" | "bottom";
+  favorites: string[];
+  feePercent: string;
+}
+
+export type GlanceRow =
+  | {
+      code: string;
+      ok: true;
+      raw: string;
+      display: string;
+    }
+  | {
+      code: string;
+      ok: false;
+      reason: "unavailable" | "invalid-amount" | "unknown-currency";
+      display: null;
+    };
+
+export interface StatusLine {
+  kind: AppStatus;
+  label: string;
+  rateLabel: string | null;
+  feeNote: string | null;
+}
+
+export interface DescribeStatusContext {
+  online: boolean;
+  pairRate: string | null;
+  fromCode: string;
+  toCode: string;
+  feePercent: string;
+  fetchError: string | null;
+  refreshing?: boolean;
 }
 
 export type DesignFont = "pixel" | "system";
