@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   DEFAULT_PREFERENCES,
+  defaultFavorites,
   loadPreferences,
   savePreferences,
 } from "../../src/storage/storage";
@@ -32,21 +33,25 @@ beforeEach(() => {
 describe("preferences", () => {
   it("returns defaults when nothing is stored", () => {
     expect(loadPreferences()).toEqual(DEFAULT_PREFERENCES);
+    expect(DEFAULT_PREFERENCES.favorites).toEqual(["USD", "EUR", "BTC"]);
+    expect(DEFAULT_PREFERENCES.feePercent).toBe("");
   });
 
-  it("round-trips full prefs including result and source", () => {
+  it("round-trips full prefs including favorites and fee", () => {
     const prefs: Preferences = {
       amount: "250",
       result: "13.95",
       from: "ZAR",
       to: "USD",
       source: "bottom",
+      favorites: ["EUR", "BTC"],
+      feePercent: "2.5",
     };
     savePreferences(prefs);
     expect(loadPreferences()).toEqual(prefs);
   });
 
-  it("accepts legacy v1 JSON without result or source", () => {
+  it("accepts legacy v1 JSON without result, source, favorites, or fee", () => {
     localStorage.setItem(
       PREFS_KEY,
       JSON.stringify({ amount: "42", from: "EUR", to: "BTC" }),
@@ -57,7 +62,10 @@ describe("preferences", () => {
       from: "EUR",
       to: "BTC",
       source: "top",
+      favorites: defaultFavorites("EUR"),
+      feePercent: "",
     });
+    expect(loadPreferences().favorites).toEqual(["USD", "BTC"]);
   });
 
   it("falls back to defaults for unknown currency codes", () => {
@@ -86,5 +94,61 @@ describe("preferences", () => {
       }),
     );
     expect(loadPreferences().source).toBe("top");
+  });
+
+  it("validates favorites as catalogue codes, unique, max 6, order preserved", () => {
+    localStorage.setItem(
+      PREFS_KEY,
+      JSON.stringify({
+        amount: "1",
+        from: "ZAR",
+        to: "USD",
+        favorites: ["USD", "NOPE", "EUR", "USD", "BTC", "GBP", "JPY", "AUD", "CAD"],
+      }),
+    );
+    expect(loadPreferences().favorites).toEqual([
+      "USD",
+      "EUR",
+      "BTC",
+      "GBP",
+      "JPY",
+      "AUD",
+    ]);
+  });
+
+  it("defaults feePercent to empty string when missing", () => {
+    localStorage.setItem(
+      PREFS_KEY,
+      JSON.stringify({ amount: "1", from: "ZAR", to: "USD" }),
+    );
+    expect(loadPreferences().feePercent).toBe("");
+  });
+
+  it("preserves favorites when save omits the new fields", () => {
+    savePreferences({
+      amount: "1",
+      result: "",
+      from: "ZAR",
+      to: "USD",
+      source: "top",
+      favorites: ["BTC", "EUR"],
+      feePercent: "1",
+    });
+    savePreferences({
+      amount: "5",
+      result: "0.2",
+      from: "ZAR",
+      to: "USD",
+      source: "top",
+    });
+    expect(loadPreferences()).toEqual({
+      amount: "5",
+      result: "0.2",
+      from: "ZAR",
+      to: "USD",
+      source: "top",
+      favorites: ["BTC", "EUR"],
+      feePercent: "1",
+    });
   });
 });

@@ -1,8 +1,11 @@
 import "./styles.css";
 import { registerSW } from "virtual:pwa-register";
 import { CoinbaseProvider } from "./api/coinbase";
+import { applyFee, undoFee } from "./conversion/applyFee";
 import { calculate, calculateInverse } from "./conversion/calculate";
+import { describeStatus } from "./conversion/describeStatus";
 import { formatResult } from "./conversion/format";
+import { buildGlanceRows, normalizeFavorites } from "./conversion/glance";
 import { parseAmount } from "./conversion/parseAmount";
 import { tipDestinations } from "./config/tips";
 import { currencies, getCurrency } from "./data/currencies";
@@ -23,7 +26,7 @@ import {
   saveDesignTheme,
   themeWithCustomFlag,
 } from "./theme/theme";
-import type { AppStatus, DesignTheme, RateTable } from "./types";
+import type { AppStatus, DesignTheme, GlanceRow, RateTable } from "./types";
 
 declare global {
   interface BeforeInstallPromptEvent extends Event {
@@ -49,6 +52,9 @@ let abortController: AbortController | null = null;
 let deferredInstall: BeforeInstallPromptEvent | null = null;
 let debugOpen = false;
 let source: "top" | "bottom" = prefs.source;
+let favorites = prefs.favorites;
+let feePercent = prefs.feePercent;
+let lastGlanceRows: GlanceRow[] = [];
 const logs: string[] = [];
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -114,6 +120,13 @@ const presetMarkup = NAMED_PRESETS.map(
     `<button type="button" class="design-preset" data-preset="${id}" aria-pressed="${designTheme.presetId === id}">${id.replace("-", " ").toUpperCase()}</button>`,
 ).join("");
 
+const favoriteToggleMarkup = currencies
+  .map(
+    (c) =>
+      `<button type="button" class="fav-toggle" data-code="${c.code}" role="switch" aria-checked="${favorites.includes(c.code)}" aria-label="Favorite ${c.code}">${c.code}</button>`,
+  )
+  .join("");
+
 app.innerHTML = `
   <main class="shell">
     <header class="brand" aria-label="Deez Currency Calculator">
@@ -151,7 +164,10 @@ app.innerHTML = `
         <div class="row">
           <div class="field amount-field">
             <label class="sr-only" for="result">Converted amount</label>
-            <input id="result" inputmode="decimal" autocomplete="off" aria-live="polite" aria-describedby="result-error" value="${prefs.result}">
+            <div class="amount-copy-row">
+              <input id="result" inputmode="decimal" autocomplete="off" aria-live="polite" aria-describedby="result-error" value="${prefs.result}">
+              <button id="copy-result" class="copy-btn" type="button" aria-label="Copy result">Copy</button>
+            </div>
             <span id="result-error" class="error"></span>
           </div>
           <div class="field currency-field">
@@ -160,6 +176,16 @@ app.innerHTML = `
           </div>
         </div>
       </div>
+      <p id="status-line" class="status-line" aria-live="polite"></p>
+      <ul id="glance-strip" class="glance-strip" aria-label="Favorite conversions" hidden></ul>
+      <details class="extras">
+        <summary>Bank fee</summary>
+        <div class="fee-row">
+          <label for="fee-percent">Fee %</label>
+          <input id="fee-percent" inputmode="decimal" autocomplete="off" value="${feePercent}" aria-label="Bank fee percent">
+        </div>
+        <div id="favorites" class="favorites" role="group" aria-label="Favorites">${favoriteToggleMarkup}</div>
+      </details>
       <p id="main-error" class="main-error" role="alert"></p>
     </section>
     <nav class="bottom-actions" aria-label="App actions">
@@ -174,14 +200,19 @@ app.innerHTML = `
       <button id="design-open" class="action settings" type="button" aria-label="Design settings" aria-haspopup="dialog" aria-controls="design-dialog">
         <span class="action-glyph" aria-hidden="true">
           <svg class="settings-icon" viewBox="0 0 16 16" width="40" height="34" shape-rendering="crispEdges">
-            <!-- left arrow up -->
-            <rect x="4" y="1" width="2" height="2"/>
-            <rect x="2" y="3" width="6" height="2"/>
-            <rect x="4" y="5" width="2" height="10"/>
-            <!-- right arrow down -->
-            <rect x="10" y="1" width="2" height="10"/>
-            <rect x="8" y="11" width="6" height="2"/>
-            <rect x="10" y="13" width="2" height="2"/>
+            <rect x="7" y="0" width="2" height="3"/>
+            <rect x="7" y="13" width="2" height="3"/>
+            <rect x="0" y="7" width="3" height="2"/>
+            <rect x="13" y="7" width="3" height="2"/>
+            <rect x="2" y="2" width="2" height="2"/>
+            <rect x="12" y="2" width="2" height="2"/>
+            <rect x="2" y="12" width="2" height="2"/>
+            <rect x="12" y="12" width="2" height="2"/>
+            <rect x="4" y="4" width="8" height="2"/>
+            <rect x="4" y="10" width="8" height="2"/>
+            <rect x="4" y="4" width="2" height="8"/>
+            <rect x="10" y="4" width="2" height="8"/>
+            <rect x="6" y="6" width="4" height="4"/>
           </svg>
         </span>
         <span>SETTINGS</span>
@@ -290,6 +321,8 @@ function save() {
     from: from.value,
     to: to.value,
     source,
+    favorites,
+    feePercent,
   });
 }
 
@@ -299,6 +332,81 @@ function setDebugOpen(open: boolean) {
   debugPanel.setAttribute("aria-hidden", String(!open));
   debugButton.setAttribute("aria-pressed", String(open));
   if (open) renderDebug();
+}
+
+function syncFavoriteToggles() {
+  byId("favorites")
+    .querySelectorAll<HTMLButtonElement>(".fav-toggle")
+    .forEach((btn) => {
+      const code = btn.dataset.code ?? "";
+      btn.setAttribute("aria-checked", String(favorites.includes(code)));
+    });
+}
+
+function paintStatusLine() {
+  const line = describeStatus(table, Date.now(), {
+    online: navigator.onLine,
+    pairRate: table?.rates[to.value] ?? null,
+    fromCode: from.value,
+    toCode: to.value,
+    feePercent,
+    fetchError: lastError === "None" ? null : lastError,
+    refreshing: status === "loading" || status === "refreshing",
+  });
+  const parts = [line.label];
+  if (line.rateLabel) parts.push(line.rateLabel);
+  if (line.feeNote) parts.push(line.feeNote);
+  const node = byId("status-line");
+  node.textContent = parts.join(" · ");
+  node.dataset.kind = line.kind;
+}
+
+function paintGlance() {
+  lastGlanceRows = buildGlanceRows({
+    baseAmount: amount.value,
+    favorites,
+    table,
+    feePercent,
+    excludeCodes: [from.value, to.value],
+  });
+  const strip = byId("glance-strip");
+  if (lastGlanceRows.length === 0) {
+    strip.innerHTML = "";
+    strip.hidden = true;
+    return;
+  }
+  strip.hidden = false;
+  strip.innerHTML = lastGlanceRows
+    .map((row) => {
+      const value = row.display ?? row.reason;
+      const disabled = row.display == null ? "disabled" : "";
+      return `<li class="glance-row">
+        <span class="glance-code">${row.code}</span>
+        <span class="glance-value">${value}</span>
+        <button type="button" class="copy-btn" data-copy-code="${row.code}" ${disabled} aria-label="Copy ${row.code}">Copy</button>
+      </li>`;
+    })
+    .join("");
+}
+
+async function copyWithFeedback(btn: HTMLButtonElement, text: string) {
+  const label = btn.textContent ?? "Copy";
+  btn.setAttribute("aria-busy", "true");
+  btn.disabled = true;
+  try {
+    await navigator.clipboard.writeText(text);
+    btn.textContent = "Copied";
+    log("Copied text to clipboard");
+  } catch {
+    lastError = "Clipboard access was denied.";
+    log(lastError);
+  } finally {
+    btn.removeAttribute("aria-busy");
+    btn.disabled = false;
+    window.setTimeout(() => {
+      if (btn.textContent === "Copied") btn.textContent = label;
+    }, 1200);
+  }
 }
 
 function renderConversion() {
@@ -319,11 +427,15 @@ function renderConversion() {
   if (!sourceInput.value) {
     drivenInput.value = "";
   } else if (parsed.valid && rate && drivenCurrency) {
-    const raw =
-      source === "top"
-        ? calculate(sourceInput.value, rate)!
-        : calculateInverse(sourceInput.value, rate)!;
-    drivenInput.value = formatResult(raw, drivenCurrency);
+    if (source === "top") {
+      const mid = calculate(parsed.normalized, rate)!;
+      const shown = applyFee(mid, feePercent) ?? mid;
+      drivenInput.value = formatResult(shown, drivenCurrency);
+    } else {
+      const gross = undoFee(parsed.normalized, feePercent) ?? parsed.normalized;
+      const mid = calculateInverse(gross, rate)!;
+      drivenInput.value = formatResult(mid, drivenCurrency);
+    }
   } else if (!rate && parsed.valid) {
     drivenInput.value = "";
     drivenError.textContent = "Unavailable";
@@ -331,12 +443,14 @@ function renderConversion() {
     drivenInput.value = "";
   }
 
+  paintGlance();
   renderStatus();
   save();
 }
 
 function renderStatus() {
   byId("main-error").textContent = status === "error" ? lastError : "";
+  paintStatusLine();
 }
 
 async function loadRates(force = false) {
@@ -416,6 +530,42 @@ byId("swap").addEventListener("click", () => {
   byId("swap").setAttribute("aria-label", `Swap ${from.value} and ${to.value}`);
   save();
   void loadRates();
+});
+
+byId<HTMLInputElement>("fee-percent").addEventListener("input", (event) => {
+  feePercent = (event.target as HTMLInputElement).value;
+  renderConversion();
+});
+
+byId("favorites").addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(
+    ".fav-toggle",
+  );
+  if (!btn?.dataset.code) return;
+  const code = btn.dataset.code;
+  const next = favorites.includes(code)
+    ? favorites.filter((c) => c !== code)
+    : [...favorites, code];
+  favorites = normalizeFavorites(next);
+  syncFavoriteToggles();
+  paintGlance();
+  save();
+});
+
+byId("copy-result").addEventListener("click", () => {
+  const btn = byId<HTMLButtonElement>("copy-result");
+  if (!result.value) return;
+  void copyWithFeedback(btn, `${result.value} ${to.value}`);
+});
+
+byId("glance-strip").addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(
+    "[data-copy-code]",
+  );
+  if (!btn?.dataset.copyCode) return;
+  const row = lastGlanceRows.find((r) => r.code === btn.dataset.copyCode);
+  if (!row?.display) return;
+  void copyWithFeedback(btn, `${row.display} ${row.code}`);
 });
 
 debugButton.addEventListener("click", () => setDebugOpen(!debugOpen));
