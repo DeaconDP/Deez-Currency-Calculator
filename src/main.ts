@@ -522,9 +522,11 @@ to.addEventListener("change", () => {
   if (!table?.rates[to.value]) void loadRates(true);
 });
 byId("swap").addEventListener("click", () => {
+  const priorResult = parseAmount(result.value);
   const oldFrom = from.value;
   from.value = to.value;
   to.value = oldFrom;
+  if (priorResult.valid) amount.value = priorResult.normalized;
   source = "top";
   table = null;
   byId("swap").setAttribute("aria-label", `Swap ${from.value} and ${to.value}`);
