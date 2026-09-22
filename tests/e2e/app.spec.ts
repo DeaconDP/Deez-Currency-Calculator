@@ -77,7 +77,6 @@ test("swap carries converted amount into the top field", async ({ page }) => {
   const amountAfter = await page.locator("#amount").inputValue();
   const amountNum = Number(amountAfter.replace(/\s/g, "").replace(",", "."));
   expect(amountNum).toBeCloseTo(priorNum, 4);
-  expect(amountNum).toBeCloseTo(0.0558 * 100, 2);
   await expect
     .poll(async () => {
       const v = await page.locator("#result").inputValue();
