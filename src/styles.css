@@ -140,13 +140,13 @@ select {
   border-radius: var(--radius);
   background: var(--control);
   color: var(--control-text);
-  font-size: calc(0.62rem * var(--ui-scale));
+  font-size: max(16px, calc(0.62rem * var(--ui-scale)));
   line-height: 1.2;
 }
 
 #amount,
 #result {
-  font-size: calc(0.68rem * var(--ui-scale));
+  font-size: max(16px, calc(0.68rem * var(--ui-scale)));
 }
 
 select {
@@ -905,7 +905,7 @@ select:focus-visible {
   input,
   select {
     min-height: max(var(--control-height), 52px);
-    font-size: calc(0.7rem * var(--ui-scale));
+    font-size: max(16px, calc(0.7rem * var(--ui-scale)));
   }
 }
 

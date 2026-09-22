@@ -124,6 +124,26 @@ test("bank fee 2.5% shrinks displayed USD result", async ({ page }) => {
   await expect(page.locator("#status-line")).toContainText(/Fee 2\.5%/);
 });
 
+test("amount inputs keep at least 16px font to avoid mobile focus zoom", async ({
+  page,
+}) => {
+  await mockCoinbase(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const sizes = await page.evaluate(() => {
+    const px = (id: string) =>
+      parseFloat(getComputedStyle(document.getElementById(id)!).fontSize);
+    return {
+      amount: px("amount"),
+      result: px("result"),
+      fee: px("fee-percent"),
+    };
+  });
+  expect(sizes.amount).toBeGreaterThanOrEqual(16);
+  expect(sizes.result).toBeGreaterThanOrEqual(16);
+  expect(sizes.fee).toBeGreaterThanOrEqual(16);
+});
+
 test("copy result button writes clipboard payload", async ({
   page,
   context,
