@@ -45,6 +45,46 @@ test("opens with the default pair and converts without refetching on input", asy
   expect(mock.requests).toBe(before);
 });
 
+test("swap carries converted amount into the top field", async ({ page }) => {
+  await page.route("https://api.coinbase.com/**", async (route) => {
+    const url = route.request().url();
+    if (url.includes("currency=USD")) {
+      await route.fulfill({
+        json: {
+          data: {
+            currency: "USD",
+            rates: {
+              ZAR: "17.9211",
+              USD: "1",
+              EUR: "0.91",
+              BTC: "0.000018",
+            },
+          },
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: zarRates });
+  });
+  await page.goto("/");
+  await page.locator("#amount").fill("100");
+  await expect(page.locator("#result")).toHaveValue(/5[.,]58/);
+  const priorResult = await page.locator("#result").inputValue();
+  const priorNum = Number(priorResult.replace(/\s/g, "").replace(",", "."));
+  await page.locator("#swap").click();
+  await expect(page.locator("#from")).toHaveValue("USD");
+  await expect(page.locator("#to")).toHaveValue("ZAR");
+  const amountAfter = await page.locator("#amount").inputValue();
+  const amountNum = Number(amountAfter.replace(/\s/g, "").replace(",", "."));
+  expect(amountNum).toBeCloseTo(priorNum, 4);
+  await expect
+    .poll(async () => {
+      const v = await page.locator("#result").inputValue();
+      return Number(v.replace(/\s/g, "").replace(",", "."));
+    })
+    .toBeCloseTo(100, 0);
+});
+
 test("editing the bottom amount updates the top without refetching", async ({
   page,
 }) => {
