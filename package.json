@@ -1,7 +1,7 @@
 {
   "name": "deez-currency-calculator",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -24,6 +24,7 @@
     "@playwright/test": "^1.53.1",
     "@tauri-apps/cli": "^2.11.4",
     "@types/big.js": "^6.2.2",
+    "@types/node": "^22.20.3",
     "prettier": "^3.5.3",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",

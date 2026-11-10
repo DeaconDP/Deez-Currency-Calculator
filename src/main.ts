@@ -1,11 +1,8 @@
 import "./styles.css";
 import { registerSW } from "virtual:pwa-register";
 import { CoinbaseProvider } from "./api/coinbase";
-import { applyFee, undoFee } from "./conversion/applyFee";
 import { calculate, calculateInverse } from "./conversion/calculate";
-import { describeStatus } from "./conversion/describeStatus";
 import { formatResult } from "./conversion/format";
-import { buildGlanceRows, normalizeFavorites } from "./conversion/glance";
 import { parseAmount } from "./conversion/parseAmount";
 import { tipDestinations } from "./config/tips";
 import { currencies, getCurrency } from "./data/currencies";
@@ -26,7 +23,7 @@ import {
   saveDesignTheme,
   themeWithCustomFlag,
 } from "./theme/theme";
-import type { AppStatus, DesignTheme, GlanceRow, RateTable } from "./types";
+import type { AppStatus, DesignTheme, RateTable } from "./types";
 
 declare global {
   interface BeforeInstallPromptEvent extends Event {
@@ -39,6 +36,13 @@ declare global {
 }
 
 const isTauri = Boolean(window.__TAURI_INTERNALS__ || window.__TAURI__);
+// App Store / Play reject non-IAP donations (ASC 3.1.1). Keep tips on web + desktop only.
+const tauriPlatform = String(import.meta.env.TAURI_ENV_PLATFORM ?? "")
+  .trim()
+  .toLowerCase();
+const forceNoTips = new URLSearchParams(location.search).has("forceNoTips");
+const tipsAllowed =
+  !forceNoTips && tauriPlatform !== "ios" && tauriPlatform !== "android";
 
 const provider = new CoinbaseProvider();
 const prefs = loadPreferences();
@@ -52,25 +56,32 @@ let abortController: AbortController | null = null;
 let deferredInstall: BeforeInstallPromptEvent | null = null;
 let debugOpen = false;
 let source: "top" | "bottom" = prefs.source;
-let favorites = prefs.favorites;
-let feePercent = prefs.feePercent;
-let lastGlanceRows: GlanceRow[] = [];
 const logs: string[] = [];
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
-const options = (selected: string) =>
-  ["fiat", "crypto"]
-    .map(
-      (type) =>
-        `<optgroup label="${type === "fiat" ? "Fiat currencies" : "Cryptocurrencies"}">${currencies
-          .filter((c) => c.type === type)
-          .map(
-            (c) =>
-              `<option value="${c.code}" ${c.code === selected ? "selected" : ""}>${c.code}</option>`,
-          )
-          .join("")}</optgroup>`,
-    )
-    .join("");
+let fromCode = prefs.from;
+let toCode = prefs.to;
+let currencyPickerTarget: "from" | "to" | null = null;
+
+const currencyPickerListMarkup = ["fiat", "crypto"]
+  .map((type) => {
+    const label = type === "fiat" ? "Fiat currencies" : "Cryptocurrencies";
+    const rows = currencies
+      .filter((c) => c.type === type)
+      .map(
+        (c) =>
+          `<button type="button" class="currency-option" data-code="${c.code}" aria-label="${c.code} ${c.name}">
+            <span class="currency-option-code">${c.code}</span>
+            <span class="currency-option-name">${c.name}</span>
+          </button>`,
+      )
+      .join("");
+    return `<section class="currency-group" aria-label="${label}">
+      <h3 class="currency-group-label">${label}</h3>
+      <div class="currency-option-list">${rows}</div>
+    </section>`;
+  })
+  .join("");
 
 const tipCards = tipDestinations
   .map(
@@ -120,83 +131,88 @@ const presetMarkup = NAMED_PRESETS.map(
     `<button type="button" class="design-preset" data-preset="${id}" aria-pressed="${designTheme.presetId === id}">${id.replace("-", " ").toUpperCase()}</button>`,
 ).join("");
 
-const favoriteToggleMarkup = currencies
-  .map(
-    (c) =>
-      `<button type="button" class="fav-toggle" data-code="${c.code}" role="switch" aria-checked="${favorites.includes(c.code)}" aria-label="Favorite ${c.code}">${c.code}</button>`,
-  )
-  .join("");
-
 app.innerHTML = `
   <main class="shell">
-    <header class="brand" aria-label="Deez Currency Calculator">
-      <h1><span>DEEZ</span><span>CURRENCY</span><span>CALCULATOR</span></h1>
-      <img class="brand-mark" src="/sprites/money-bag.png" alt="" width="96" height="80">
-    </header>
-    <section class="converter" aria-labelledby="converter-title">
-      <h2 id="converter-title" class="sr-only">Currency calculator</h2>
-      <div class="conversion-grid">
-        <div class="row">
-          <div class="field amount-field">
-            <label class="sr-only" for="amount">Amount</label>
-            <input id="amount" inputmode="decimal" autocomplete="off" value="${prefs.amount}" aria-describedby="amount-error">
-            <span id="amount-error" class="error"></span>
-          </div>
-          <div class="field currency-field">
-            <label class="sr-only" for="from">From currency</label>
-            <select id="from">${options(prefs.from)}</select>
-          </div>
-        </div>
-        <div class="swap-row">
-          <button id="swap" class="swap" type="button" aria-label="Swap ${prefs.from} and ${prefs.to}" title="Swap currencies">
-            <svg class="swap-icon" viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" shape-rendering="crispEdges">
-              <!-- left arrow up -->
-              <rect x="4" y="1" width="2" height="2"/>
-              <rect x="2" y="3" width="6" height="2"/>
-              <rect x="4" y="5" width="2" height="10"/>
-              <!-- right arrow down -->
-              <rect x="10" y="1" width="2" height="10"/>
-              <rect x="8" y="11" width="6" height="2"/>
-              <rect x="10" y="13" width="2" height="2"/>
-            </svg>
-          </button>
-        </div>
-        <div class="row">
-          <div class="field amount-field">
-            <label class="sr-only" for="result">Converted amount</label>
-            <div class="amount-copy-row">
-              <input id="result" inputmode="decimal" autocomplete="off" aria-live="polite" aria-describedby="result-error" value="${prefs.result}">
-              <button id="copy-result" class="copy-btn" type="button" aria-label="Copy result">Copy</button>
+    ${
+      forceNoTips
+        ? `<p class="store-shell-banner" role="status">Store shell preview — tip donations hidden (App Store 3.1.1)</p>`
+        : ""
+    }
+    <div class="stage">
+      <header class="brand" aria-label="Deez Currency Calculator">
+        <h1><span>DEEZ</span><span>CURRENCY</span><span>CALCULATOR</span></h1>
+        <img class="brand-mark" src="/sprites/btc-chart.png" alt="" width="96" height="96">
+      </header>
+      <section class="converter" aria-labelledby="converter-title">
+        <h2 id="converter-title" class="sr-only">Currency calculator</h2>
+        <div class="conversion-grid">
+          <div class="row">
+            <div class="field amount-field">
+              <label class="sr-only" for="amount">Amount</label>
+              <input id="amount" inputmode="decimal" autocomplete="off" value="${prefs.amount}" aria-describedby="amount-error">
+              <span id="amount-error" class="error"></span>
             </div>
-            <span id="result-error" class="error"></span>
+            <div class="field currency-field">
+              <button
+                id="from-trigger"
+                class="currency-trigger"
+                type="button"
+                aria-haspopup="dialog"
+                aria-controls="currency-picker"
+                aria-label="From currency ${prefs.from}"
+              >
+                <span class="currency-trigger-code">${prefs.from}</span>
+                <span class="currency-trigger-chevron" aria-hidden="true"></span>
+              </button>
+            </div>
           </div>
-          <div class="field currency-field">
-            <label class="sr-only" for="to">To currency</label>
-            <select id="to">${options(prefs.to)}</select>
+          <div class="swap-row">
+            <button id="swap" class="swap" type="button" aria-label="Invert amounts" title="Invert amounts">
+              <svg class="swap-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M7 3v18"/>
+                <path d="M3 7l4-4 4 4"/>
+                <path d="M17 21V3"/>
+                <path d="M13 17l4 4 4-4"/>
+              </svg>
+            </button>
+          </div>
+          <div class="row">
+            <div class="field amount-field">
+              <label class="sr-only" for="result">Converted amount</label>
+              <input id="result" inputmode="decimal" autocomplete="off" aria-live="polite" aria-describedby="result-error" value="${prefs.result}">
+              <span id="result-error" class="error"></span>
+            </div>
+            <div class="field currency-field">
+              <button
+                id="to-trigger"
+                class="currency-trigger"
+                type="button"
+                aria-haspopup="dialog"
+                aria-controls="currency-picker"
+                aria-label="To currency ${prefs.to}"
+              >
+                <span class="currency-trigger-code">${prefs.to}</span>
+                <span class="currency-trigger-chevron" aria-hidden="true"></span>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-      <p id="status-line" class="status-line" aria-live="polite"></p>
-      <ul id="glance-strip" class="glance-strip" aria-label="Favorite conversions" hidden></ul>
-      <details class="extras">
-        <summary>Bank fee</summary>
-        <div class="fee-row">
-          <label for="fee-percent">Fee %</label>
-          <input id="fee-percent" inputmode="decimal" autocomplete="off" value="${feePercent}" aria-label="Bank fee percent">
-        </div>
-        <div id="favorites" class="favorites" role="group" aria-label="Favorites">${favoriteToggleMarkup}</div>
-      </details>
-      <p id="main-error" class="main-error" role="alert"></p>
-    </section>
+        <p id="main-error" class="main-error" role="alert"></p>
+      </section>
+    </div>
     <nav class="bottom-actions" aria-label="App actions">
       <button id="debug-open" class="action debug" type="button" aria-pressed="false" aria-controls="debug-panel">
         <img src="/sprites/debug-alien.png" alt="" width="40" height="34">
         <span>DEBUG</span>
       </button>
-      <button id="tip-open" class="action tip" type="button">
+      ${
+        tipsAllowed
+          ? `<button id="tip-open" class="action tip" type="button">
         <img src="/sprites/tip-heart.png" alt="" width="40" height="34">
         <span>TIP</span>
-      </button>
+      </button>`
+          : ""
+      }
       <button id="design-open" class="action settings" type="button" aria-label="Design settings" aria-haspopup="dialog" aria-controls="design-dialog">
         <span class="action-glyph" aria-hidden="true">
           <svg class="settings-icon" viewBox="0 0 16 16" width="40" height="34" shape-rendering="crispEdges">
@@ -237,12 +253,23 @@ app.innerHTML = `
       <div id="debug-content" class="debug-meta sr-only" aria-hidden="true"></div>
     </section>
   </main>
-  <dialog id="tip-dialog" class="tip-dialog" aria-labelledby="tip-title">
+  ${
+    tipsAllowed
+      ? `<dialog id="tip-dialog" class="tip-dialog" aria-labelledby="tip-title">
     <button class="close tip-close" type="button" aria-label="Close tip screen">×</button>
     <div class="tip-body">
       <h2 id="tip-title"><span>TIP IF</span><span>YOU'RE</span><span>COOL</span></h2>
       <img class="tip-check" src="/sprites/tip-check.png" alt="" width="72" height="72">
       <div class="tip-qr-well">${tipCards}</div>
+    </div>
+  </dialog>`
+      : ""
+  }
+  <dialog id="currency-picker" class="currency-picker" aria-labelledby="currency-picker-title">
+    <button class="close currency-picker-close" type="button" aria-label="Close currency list">×</button>
+    <div class="currency-picker-body">
+      <h2 id="currency-picker-title" class="currency-picker-title">Choose currency</h2>
+      <div id="currency-picker-list" class="currency-picker-list">${currencyPickerListMarkup}</div>
     </div>
   </dialog>
   <dialog id="design-dialog" class="design-dialog" aria-labelledby="design-title">
@@ -297,11 +324,27 @@ app.innerHTML = `
 
 const amount = byId<HTMLInputElement>("amount");
 const result = byId<HTMLInputElement>("result");
-const from = byId<HTMLSelectElement>("from");
-const to = byId<HTMLSelectElement>("to");
+
+/** Select all on focus so a tap is ready to replace. */
+function selectAllOnFocus(input: HTMLInputElement) {
+  input.addEventListener("focus", () => {
+    requestAnimationFrame(() => input.select());
+  });
+  // Desktop browsers clear selection on mouseup after focus; keep it.
+  input.addEventListener("mouseup", (event) => event.preventDefault());
+}
+
+selectAllOnFocus(amount);
+selectAllOnFocus(result);
+const fromTrigger = byId<HTMLButtonElement>("from-trigger");
+const toTrigger = byId<HTMLButtonElement>("to-trigger");
+const currencyPicker = byId<HTMLDialogElement>("currency-picker");
+const currencyPickerTitle = byId("currency-picker-title");
 const debugPanel = byId("debug-panel");
 const debugButton = byId<HTMLButtonElement>("debug-open");
-const tipDialog = byId<HTMLDialogElement>("tip-dialog");
+const tipDialog = tipsAllowed
+  ? byId<HTMLDialogElement>("tip-dialog")
+  : null;
 const designDialog = byId<HTMLDialogElement>("design-dialog");
 const designOpen = byId<HTMLButtonElement>("design-open");
 const pixelFontToggle = byId<HTMLButtonElement>("design-pixel-font");
@@ -318,12 +361,83 @@ function save() {
   savePreferences({
     amount: amount.value,
     result: result.value,
-    from: from.value,
-    to: to.value,
+    from: fromCode,
+    to: toCode,
     source,
-    favorites,
-    feePercent,
+    favorites: [],
+    feePercent: "",
   });
+}
+
+function syncCurrencyTriggers() {
+  const fromCurrency = getCurrency(fromCode);
+  const toCurrency = getCurrency(toCode);
+  fromTrigger.querySelector(".currency-trigger-code")!.textContent = fromCode;
+  toTrigger.querySelector(".currency-trigger-code")!.textContent = toCode;
+  fromTrigger.setAttribute(
+    "aria-label",
+    `From currency ${fromCode}${fromCurrency ? ` ${fromCurrency.name}` : ""}`,
+  );
+  toTrigger.setAttribute(
+    "aria-label",
+    `To currency ${toCode}${toCurrency ? ` ${toCurrency.name}` : ""}`,
+  );
+}
+
+function paintCurrencyPickerSelection() {
+  const selected = currencyPickerTarget === "from" ? fromCode : toCode;
+  currencyPicker
+    .querySelectorAll<HTMLButtonElement>(".currency-option")
+    .forEach((btn) => {
+      const active = btn.dataset.code === selected;
+      btn.setAttribute("aria-current", String(active));
+      btn.classList.toggle("is-selected", active);
+    });
+}
+
+function openCurrencyPicker(target: "from" | "to") {
+  currencyPickerTarget = target;
+  currencyPickerTitle.textContent =
+    target === "from" ? "From currency" : "To currency";
+  paintCurrencyPickerSelection();
+  setDebugOpen(false);
+  currencyPicker.showModal();
+  const selected = currencyPicker.querySelector<HTMLButtonElement>(
+    ".currency-option.is-selected",
+  );
+  (selected ?? currencyPicker.querySelector<HTMLElement>(".close"))?.focus();
+}
+
+function closeCurrencyPicker() {
+  if (!currencyPicker.open) return;
+  currencyPicker.close();
+  currencyPickerTarget = null;
+}
+
+function applyCurrencyPick(code: string) {
+  if (!currencyPickerTarget || !getCurrency(code)) return;
+  if (currencyPickerTarget === "from") {
+    if (code === fromCode) {
+      closeCurrencyPicker();
+      return;
+    }
+    fromCode = code;
+    syncCurrencyTriggers();
+    closeCurrencyPicker();
+    table = null;
+    save();
+    void loadRates();
+    return;
+  }
+  if (code === toCode) {
+    closeCurrencyPicker();
+    return;
+  }
+  toCode = code;
+  syncCurrencyTriggers();
+  closeCurrencyPicker();
+  renderConversion();
+  if (!table?.rates[toCode]) void loadRates(true);
 }
 
 function setDebugOpen(open: boolean) {
@@ -334,85 +448,10 @@ function setDebugOpen(open: boolean) {
   if (open) renderDebug();
 }
 
-function syncFavoriteToggles() {
-  byId("favorites")
-    .querySelectorAll<HTMLButtonElement>(".fav-toggle")
-    .forEach((btn) => {
-      const code = btn.dataset.code ?? "";
-      btn.setAttribute("aria-checked", String(favorites.includes(code)));
-    });
-}
-
-function paintStatusLine() {
-  const line = describeStatus(table, Date.now(), {
-    online: navigator.onLine,
-    pairRate: table?.rates[to.value] ?? null,
-    fromCode: from.value,
-    toCode: to.value,
-    feePercent,
-    fetchError: lastError === "None" ? null : lastError,
-    refreshing: status === "loading" || status === "refreshing",
-  });
-  const parts = [line.label];
-  if (line.rateLabel) parts.push(line.rateLabel);
-  if (line.feeNote) parts.push(line.feeNote);
-  const node = byId("status-line");
-  node.textContent = parts.join(" · ");
-  node.dataset.kind = line.kind;
-}
-
-function paintGlance() {
-  lastGlanceRows = buildGlanceRows({
-    baseAmount: amount.value,
-    favorites,
-    table,
-    feePercent,
-    excludeCodes: [from.value, to.value],
-  });
-  const strip = byId("glance-strip");
-  if (lastGlanceRows.length === 0) {
-    strip.innerHTML = "";
-    strip.hidden = true;
-    return;
-  }
-  strip.hidden = false;
-  strip.innerHTML = lastGlanceRows
-    .map((row) => {
-      const value = row.display ?? row.reason;
-      const disabled = row.display == null ? "disabled" : "";
-      return `<li class="glance-row">
-        <span class="glance-code">${row.code}</span>
-        <span class="glance-value">${value}</span>
-        <button type="button" class="copy-btn" data-copy-code="${row.code}" ${disabled} aria-label="Copy ${row.code}">Copy</button>
-      </li>`;
-    })
-    .join("");
-}
-
-async function copyWithFeedback(btn: HTMLButtonElement, text: string) {
-  const label = btn.textContent ?? "Copy";
-  btn.setAttribute("aria-busy", "true");
-  btn.disabled = true;
-  try {
-    await navigator.clipboard.writeText(text);
-    btn.textContent = "Copied";
-    log("Copied text to clipboard");
-  } catch {
-    lastError = "Clipboard access was denied.";
-    log(lastError);
-  } finally {
-    btn.removeAttribute("aria-busy");
-    btn.disabled = false;
-    window.setTimeout(() => {
-      if (btn.textContent === "Copied") btn.textContent = label;
-    }, 1200);
-  }
-}
-
 function renderConversion() {
-  const rate = table?.rates[to.value];
-  const fromCurrency = getCurrency(from.value);
-  const toCurrency = getCurrency(to.value);
+  const rate = table?.rates[toCode];
+  const fromCurrency = getCurrency(fromCode);
+  const toCurrency = getCurrency(toCode);
   const sourceInput = source === "top" ? amount : result;
   const drivenInput = source === "top" ? result : amount;
   const sourceError = byId(source === "top" ? "amount-error" : "result-error");
@@ -429,11 +468,9 @@ function renderConversion() {
   } else if (parsed.valid && rate && drivenCurrency) {
     if (source === "top") {
       const mid = calculate(parsed.normalized, rate)!;
-      const shown = applyFee(mid, feePercent) ?? mid;
-      drivenInput.value = formatResult(shown, drivenCurrency);
+      drivenInput.value = formatResult(mid, drivenCurrency);
     } else {
-      const gross = undoFee(parsed.normalized, feePercent) ?? parsed.normalized;
-      const mid = calculateInverse(gross, rate)!;
+      const mid = calculateInverse(parsed.normalized, rate)!;
       drivenInput.value = formatResult(mid, drivenCurrency);
     }
   } else if (!rate && parsed.valid) {
@@ -443,14 +480,12 @@ function renderConversion() {
     drivenInput.value = "";
   }
 
-  paintGlance();
   renderStatus();
   save();
 }
 
 function renderStatus() {
   byId("main-error").textContent = status === "error" ? lastError : "";
-  paintStatusLine();
 }
 
 async function loadRates(force = false) {
@@ -459,7 +494,7 @@ async function loadRates(force = false) {
   abortController = own;
   status = table ? "refreshing" : "loading";
   renderStatus();
-  const cached = await getCachedRates(from.value);
+  const cached = await getCachedRates(fromCode);
   if (own.signal.aborted) return;
   if (cached) {
     table = cached;
@@ -476,13 +511,13 @@ async function loadRates(force = false) {
   const started = performance.now();
   status = table ? "refreshing" : "loading";
   renderStatus();
-  log(`Fetching ${from.value} rates`);
+  log(`Fetching ${fromCode} rates`);
   try {
-    const loaded = await provider.getRates(from.value, own.signal);
-    if (own.signal.aborted || loaded.base !== from.value) return;
-    if (!loaded.rates[to.value])
+    const loaded = await provider.getRates(fromCode, own.signal);
+    if (own.signal.aborted || loaded.base !== fromCode) return;
+    if (!loaded.rates[toCode])
       throw new Error(
-        `No current rate is available for ${from.value} → ${to.value}.`,
+        `No current rate is available for ${fromCode} → ${toCode}.`,
       );
     table = loaded;
     requestDuration = Math.round(performance.now() - started);
@@ -512,60 +547,37 @@ result.addEventListener("input", () => {
   source = "bottom";
   renderConversion();
 });
-from.addEventListener("change", () => {
-  table = null;
-  save();
-  void loadRates();
+fromTrigger.addEventListener("click", () => openCurrencyPicker("from"));
+toTrigger.addEventListener("click", () => openCurrencyPicker("to"));
+currencyPicker.querySelector<HTMLButtonElement>(".close")?.addEventListener(
+  "click",
+  () => closeCurrencyPicker(),
+);
+currencyPicker.addEventListener("click", (event) => {
+  if (event.target === currencyPicker) closeCurrencyPicker();
 });
-to.addEventListener("change", () => {
-  renderConversion();
-  if (!table?.rates[to.value]) void loadRates(true);
+currencyPicker.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeCurrencyPicker();
 });
-byId("swap").addEventListener("click", () => {
-  const oldFrom = from.value;
-  from.value = to.value;
-  to.value = oldFrom;
-  source = "top";
-  table = null;
-  byId("swap").setAttribute("aria-label", `Swap ${from.value} and ${to.value}`);
-  save();
-  void loadRates();
-});
-
-byId<HTMLInputElement>("fee-percent").addEventListener("input", (event) => {
-  feePercent = (event.target as HTMLInputElement).value;
-  renderConversion();
-});
-
-byId("favorites").addEventListener("click", (event) => {
+byId("currency-picker-list").addEventListener("click", (event) => {
   const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(
-    ".fav-toggle",
+    ".currency-option",
   );
   if (!btn?.dataset.code) return;
-  const code = btn.dataset.code;
-  const next = favorites.includes(code)
-    ? favorites.filter((c) => c !== code)
-    : [...favorites, code];
-  favorites = normalizeFavorites(next);
-  syncFavoriteToggles();
-  paintGlance();
-  save();
+  applyCurrencyPick(btn.dataset.code);
 });
-
-byId("copy-result").addEventListener("click", () => {
-  const btn = byId<HTMLButtonElement>("copy-result");
-  if (!result.value) return;
-  void copyWithFeedback(btn, `${result.value} ${to.value}`);
-});
-
-byId("glance-strip").addEventListener("click", (event) => {
-  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(
-    "[data-copy-code]",
-  );
-  if (!btn?.dataset.copyCode) return;
-  const row = lastGlanceRows.find((r) => r.code === btn.dataset.copyCode);
-  if (!row?.display) return;
-  void copyWithFeedback(btn, `${row.display} ${row.code}`);
+byId("swap").addEventListener("click", () => {
+  // Invert which side is 1 — currencies stay put.
+  // Mode 1: 1 FROM = X TO  →  Mode 2: Y FROM = 1 TO  (and back).
+  if (source === "top") {
+    result.value = "1";
+    source = "bottom";
+  } else {
+    amount.value = "1";
+    source = "top";
+  }
+  renderConversion();
 });
 
 debugButton.addEventListener("click", () => setDebugOpen(!debugOpen));
@@ -573,8 +585,9 @@ document.addEventListener("keydown", (event) => {
   if (
     event.key === "Escape" &&
     debugOpen &&
-    !tipDialog.open &&
-    !designDialog.open
+    !tipDialog?.open &&
+    !designDialog.open &&
+    !currencyPicker.open
   ) {
     setDebugOpen(false);
   }
@@ -582,6 +595,7 @@ document.addEventListener("keydown", (event) => {
 let tipClosing = false;
 
 function focusTipClose() {
+  if (!tipDialog) return;
   const closeBtn = tipDialog.querySelector<HTMLElement>(".close");
   if (!closeBtn) return;
   try {
@@ -595,6 +609,7 @@ function focusTipClose() {
 }
 
 function openTipDialog() {
+  if (!tipDialog) return;
   tipClosing = false;
   tipDialog.classList.remove("is-closing");
   tipDialog.showModal();
@@ -602,7 +617,7 @@ function openTipDialog() {
 }
 
 function closeTipDialog() {
-  if (!tipDialog.open || tipClosing) return;
+  if (!tipDialog || !tipDialog.open || tipClosing) return;
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)")
     .matches;
   if (reduceMotion) {
@@ -614,7 +629,7 @@ function closeTipDialog() {
   tipDialog.classList.add("is-closing");
   let finished = false;
   const finish = () => {
-    if (finished) return;
+    if (finished || !tipDialog) return;
     finished = true;
     tipDialog.close();
     tipDialog.classList.remove("is-closing");
@@ -626,18 +641,20 @@ function closeTipDialog() {
   window.setTimeout(finish, 280);
 }
 
-byId("tip-open").addEventListener("click", () => openTipDialog());
-tipDialog.querySelector<HTMLButtonElement>(".close")?.addEventListener(
-  "click",
-  () => closeTipDialog(),
-);
-tipDialog.addEventListener("click", (event) => {
-  if (event.target === tipDialog) closeTipDialog();
-});
-tipDialog.addEventListener("cancel", (event) => {
-  event.preventDefault();
-  closeTipDialog();
-});
+if (tipsAllowed && tipDialog) {
+  byId("tip-open").addEventListener("click", () => openTipDialog());
+  tipDialog.querySelector<HTMLButtonElement>(".close")?.addEventListener(
+    "click",
+    () => closeTipDialog(),
+  );
+  tipDialog.addEventListener("click", (event) => {
+    if (event.target === tipDialog) closeTipDialog();
+  });
+  tipDialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeTipDialog();
+  });
+}
 
 function commitTheme(next: DesignTheme) {
   designTheme = themeWithCustomFlag(next);
@@ -766,11 +783,11 @@ function renderDebug() {
     ? `${Math.floor((Date.now() - table.fetchedAt) / 1000)} seconds`
     : "Not available";
   const rows = [
-    ["App version", "1.0.0"],
+    ["App version", "1.0.2"],
     ["Shell", isTauri ? "Tauri desktop" : "Browser"],
     ["Connection", navigator.onLine ? "Online" : "Offline"],
     ["Provider", table?.provider ?? "Coinbase"],
-    ["Current base", from?.value ?? prefs.from],
+    ["Current base", fromCode],
     ["Valid rates", String(table ? Object.keys(table.rates).length : 0)],
     [
       "Last fetch",
@@ -861,5 +878,6 @@ if (!isTauri) {
 }
 
 log("Application started");
+syncCurrencyTriggers();
 renderDebug();
 void loadRates();

@@ -1,0 +1,488 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1EAA960219CF0831DD2BBD3A /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = C91773A0D52366E7B9BE8470 /* LaunchScreen.storyboard */; };
+		1EE644AE7D841169BBC2F48F /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 89CD030F0355F89EBAD0EC21 /* MetalKit.framework */; };
+		29D084D0F5FEA8D97F178A4D /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F5CA7FCD51DD2F4D0708C2D8 /* UIKit.framework */; };
+		461CE7B0BD63BEEF71137689 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E374458B01CE2D4A407059C0 /* Assets.xcassets */; };
+		73504C35A45C8841424CFC38 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 927B4CA26E9BED31AB8DA215 /* QuartzCore.framework */; };
+		8B246FE2FDAB07BD4246B9BE /* assets in Resources */ = {isa = PBXBuildFile; fileRef = A2605054CA3802AF4101A11E /* assets */; };
+		94F0BC54E38545472A2B916C /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91B04BE4B8389C6AFD38379B /* WebKit.framework */; };
+		9E4DA1B77DDE87CA1284DC66 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 61833E3FBE586790BB1C60DB /* Metal.framework */; };
+		A0053DF660456DE9BF132C1A /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = F5108EB8001E4B1E8D59674D /* libapp.a */; };
+		A428CDCEBAE6CC5EC5C39855 /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 35BF88350A5C018DF760AE2E /* main.mm */; };
+		A5632AABB725896B0D8DFFF9 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E2E628DF652AF9F43327BA8C /* Security.framework */; };
+		AE2FD2ABB74C083A3D723AC1 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0F4AE52FB90D39ACE33DFD73 /* CoreGraphics.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0D26D47E837ED2D2BD0AB794 /* deez-currency-calculator_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "deez-currency-calculator_iOS.entitlements"; sourceTree = "<group>"; };
+		0F4AE52FB90D39ACE33DFD73 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		11E80B678CEDBD0E679B529D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		35BF88350A5C018DF760AE2E /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
+		4A9202B6486D117985D7DC15 /* deez-currency-calculator_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; name = "deez-currency-calculator_iOS.app"; path = DeacsCurrencyConverter.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		61833E3FBE586790BB1C60DB /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		89CD030F0355F89EBAD0EC21 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
+		91B04BE4B8389C6AFD38379B /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		927B4CA26E9BED31AB8DA215 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		A2605054CA3802AF4101A11E /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
+		A97B13343DE0963D90D4B2F7 /* lib.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = lib.rs; sourceTree = "<group>"; };
+		C91773A0D52366E7B9BE8470 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		CEA13313668E953C774FE6C4 /* main.rs */ = {isa = PBXFileReference; lastKnownFileType = text; path = main.rs; sourceTree = "<group>"; };
+		E2E628DF652AF9F43327BA8C /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		E374458B01CE2D4A407059C0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F5108EB8001E4B1E8D59674D /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
+		F5CA7FCD51DD2F4D0708C2D8 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		F6489D64495BD39FFD499749 /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		CE5444F49D0C12A3F705F5CD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A0053DF660456DE9BF132C1A /* libapp.a in Frameworks */,
+				AE2FD2ABB74C083A3D723AC1 /* CoreGraphics.framework in Frameworks */,
+				9E4DA1B77DDE87CA1284DC66 /* Metal.framework in Frameworks */,
+				1EE644AE7D841169BBC2F48F /* MetalKit.framework in Frameworks */,
+				73504C35A45C8841424CFC38 /* QuartzCore.framework in Frameworks */,
+				A5632AABB725896B0D8DFFF9 /* Security.framework in Frameworks */,
+				29D084D0F5FEA8D97F178A4D /* UIKit.framework in Frameworks */,
+				94F0BC54E38545472A2B916C /* WebKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		3A63AEE58130B13F5A4F330E /* Externals */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Externals;
+			sourceTree = "<group>";
+		};
+		44FBC8F7B5A03F347F6AF530 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				A97B13343DE0963D90D4B2F7 /* lib.rs */,
+				CEA13313668E953C774FE6C4 /* main.rs */,
+			);
+			name = src;
+			path = ../../src;
+			sourceTree = "<group>";
+		};
+		4BB4EB55124431BCB4E9A3DE /* deez-currency-calculator */ = {
+			isa = PBXGroup;
+			children = (
+				35BF88350A5C018DF760AE2E /* main.mm */,
+				F314ACA73B5D5AFF3EA2578A /* bindings */,
+			);
+			path = "deez-currency-calculator";
+			sourceTree = "<group>";
+		};
+		7CF2FBC82DB7755906E238F1 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				4BB4EB55124431BCB4E9A3DE /* deez-currency-calculator */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		93E76AF8118D379F3D0C9DBB /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				0F4AE52FB90D39ACE33DFD73 /* CoreGraphics.framework */,
+				F5108EB8001E4B1E8D59674D /* libapp.a */,
+				61833E3FBE586790BB1C60DB /* Metal.framework */,
+				89CD030F0355F89EBAD0EC21 /* MetalKit.framework */,
+				927B4CA26E9BED31AB8DA215 /* QuartzCore.framework */,
+				E2E628DF652AF9F43327BA8C /* Security.framework */,
+				F5CA7FCD51DD2F4D0708C2D8 /* UIKit.framework */,
+				91B04BE4B8389C6AFD38379B /* WebKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		D7BBE73423FE9F5BE9145EF3 = {
+			isa = PBXGroup;
+			children = (
+				A2605054CA3802AF4101A11E /* assets */,
+				E374458B01CE2D4A407059C0 /* Assets.xcassets */,
+				C91773A0D52366E7B9BE8470 /* LaunchScreen.storyboard */,
+				FC772343DFE4FDFE3D47AC38 /* deez-currency-calculator_iOS */,
+				3A63AEE58130B13F5A4F330E /* Externals */,
+				7CF2FBC82DB7755906E238F1 /* Sources */,
+				44FBC8F7B5A03F347F6AF530 /* src */,
+				93E76AF8118D379F3D0C9DBB /* Frameworks */,
+				E666F38AF825E670372AA301 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		E666F38AF825E670372AA301 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				4A9202B6486D117985D7DC15 /* deez-currency-calculator_iOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		F314ACA73B5D5AFF3EA2578A /* bindings */ = {
+			isa = PBXGroup;
+			children = (
+				F6489D64495BD39FFD499749 /* bindings.h */,
+			);
+			path = bindings;
+			sourceTree = "<group>";
+		};
+		FC772343DFE4FDFE3D47AC38 /* deez-currency-calculator_iOS */ = {
+			isa = PBXGroup;
+			children = (
+				0D26D47E837ED2D2BD0AB794 /* deez-currency-calculator_iOS.entitlements */,
+				11E80B678CEDBD0E679B529D /* Info.plist */,
+			);
+			path = "deez-currency-calculator_iOS";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D4022A994A81F9A2DF31F95C /* deez-currency-calculator_iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 67D41ABF11325ABDF1C2246E /* Build configuration list for PBXNativeTarget "deez-currency-calculator_iOS" */;
+			buildPhases = (
+				9D1AF778CFABBD64C21ADE58 /* Build Rust Code */,
+				46C341A655036DFE1881CADE /* Sources */,
+				B050D92B2D259F8E014D721A /* Resources */,
+				CE5444F49D0C12A3F705F5CD /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "deez-currency-calculator_iOS";
+			packageProductDependencies = (
+			);
+			productName = "deez-currency-calculator_iOS";
+			productReference = 4A9202B6486D117985D7DC15 /* deez-currency-calculator_iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		F0FA950AF79E62432FE45122 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					D4022A994A81F9A2DF31F95C = {
+						DevelopmentTeam = 3825NK7CQ8;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 8021B2B33A5FD212E737967F /* Build configuration list for PBXProject "deez-currency-calculator" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = D7BBE73423FE9F5BE9145EF3;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = E666F38AF825E670372AA301 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D4022A994A81F9A2DF31F95C /* deez-currency-calculator_iOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B050D92B2D259F8E014D721A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				461CE7B0BD63BEEF71137689 /* Assets.xcassets in Resources */,
+				1EAA960219CF0831DD2BBD3A /* LaunchScreen.storyboard in Resources */,
+				8B246FE2FDAB07BD4246B9BE /* assets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		9D1AF778CFABBD64C21ADE58 /* Build Rust Code */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Rust Code";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a",
+				"$(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/zsh;
+			shellScript = "export PATH=\"$HOME/.nvm/versions/node/v24.14.0/bin:$HOME/.cargo/bin:$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH\"\n# Xcode 27+ rejects iOS deployment targets below 15.0 (swift-rs / tauri default to 13–14).\nexport IPHONEOS_DEPLOYMENT_TARGET=\"${IPHONEOS_DEPLOYMENT_TARGET:-15.0}\"\n# Xcode build phases don't load nvm/zshrc — ensure pnpm + cargo are reachable.\nif ! command -v pnpm >/dev/null 2>&1; then\n  echo \"error: pnpm not found on PATH=$PATH\" >&2\n  exit 127\nfi\npnpm tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths \"${FRAMEWORK_SEARCH_PATHS:?}\" --header-search-paths \"${HEADER_SEARCH_PATHS:?}\" --gcc-preprocessor-definitions \"${GCC_PREPROCESSOR_DEFINITIONS:-}\" --configuration ${CONFIGURATION:?} ${ARCHS:?}";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		46C341A655036DFE1881CADE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A428CDCEBAE6CC5EC5C39855 /* main.mm in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		090120D6C11C319723482313 /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "deez-currency-calculator_iOS/deez-currency-calculator_iOS.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "3825NK7CQ8";
+				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = "deez-currency-calculator_iOS/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION)",
+					"$(SDKROOT)/usr/lib/swift",
+					"$(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME)",
+					"$(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION)",
+					"$(SDKROOT)/usr/lib/swift",
+					"$(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME)",
+					"$(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.Worldbuildio.currencyconverter;
+				PRODUCT_NAME = "DeacsCurrencyConverter";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALID_ARCHS = arm64;
+			};
+			name = release;
+		};
+		1E794B66A43D3B98BA4DF1CF /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = release;
+		};
+		AD1A66D753BE9D4DB5C57B06 /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = debug;
+		};
+		FB6373F1D8B506969EAFA1DF /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "deez-currency-calculator_iOS/deez-currency-calculator_iOS.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = "3825NK7CQ8";
+				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = "deez-currency-calculator_iOS/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION)",
+					"$(SDKROOT)/usr/lib/swift",
+					"$(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME)",
+					"$(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION)",
+					"$(SDKROOT)/usr/lib/swift",
+					"$(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME)",
+					"$(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.Worldbuildio.currencyconverter;
+				PRODUCT_NAME = "DeacsCurrencyConverter";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALID_ARCHS = arm64;
+			};
+			name = debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		67D41ABF11325ABDF1C2246E /* Build configuration list for PBXNativeTarget "deez-currency-calculator_iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FB6373F1D8B506969EAFA1DF /* debug */,
+				090120D6C11C319723482313 /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+		8021B2B33A5FD212E737967F /* Build configuration list for PBXProject "deez-currency-calculator" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AD1A66D753BE9D4DB5C57B06 /* debug */,
+				1E794B66A43D3B98BA4DF1CF /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = F0FA950AF79E62432FE45122 /* Project object */;
+}
