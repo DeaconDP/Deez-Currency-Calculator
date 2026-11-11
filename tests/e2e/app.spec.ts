@@ -120,6 +120,28 @@ test("swap toggles between 1-from and 1-to modes", async ({ page }) => {
   await expect(page.locator("#result")).toHaveValue(/0[.,]0558/);
 });
 
+test("swap keeps the typed amount and inverts the direction", async ({
+  page,
+}) => {
+  await mockCoinbase(page);
+  await page.goto("/");
+  await page.locator("#amount").fill("100");
+  await expect(page.locator("#result")).toHaveValue(/5[.,]58/);
+  await page.locator("#swap").click();
+  await expect(page.locator("#from-trigger")).toContainText("ZAR");
+  await expect(page.locator("#to-trigger")).toContainText("USD");
+  await expect(page.locator("#result")).toHaveValue("100");
+  await expect
+    .poll(async () => {
+      const v = await page.locator("#amount").inputValue();
+      return Number(v.replace(/\s/g, "").replace(",", "."));
+    })
+    .toBeCloseTo(1792.11, 1);
+  await page.locator("#swap").click();
+  await expect(page.locator("#amount")).toHaveValue("100");
+  await expect(page.locator("#result")).toHaveValue(/5[.,]58/);
+});
+
 test("shows labeled BTC and USDC donation QR codes on the tip screen", async ({
   page,
 }) => {

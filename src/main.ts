@@ -568,13 +568,16 @@ byId("currency-picker-list").addEventListener("click", (event) => {
   applyCurrencyPick(btn.dataset.code);
 });
 byId("swap").addEventListener("click", () => {
-  // Invert which side is 1 — currencies stay put.
-  // Mode 1: 1 FROM = X TO  →  Mode 2: Y FROM = 1 TO  (and back).
+  // Invert direction — currencies stay put and the typed amount carries over.
+  // 1 FROM = X TO  →  Y FROM = 1 TO;  100 FROM = X TO  →  Y FROM = 100 TO.
+  const sourceInput = source === "top" ? amount : result;
+  const typed = sourceInput.value.trim();
+  const carried = typed && parseAmount(typed).valid ? typed : "1";
   if (source === "top") {
-    result.value = "1";
+    result.value = carried;
     source = "bottom";
   } else {
-    amount.value = "1";
+    amount.value = carried;
     source = "top";
   }
   renderConversion();
