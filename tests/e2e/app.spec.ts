@@ -134,7 +134,7 @@ test("swap keeps the typed amount and inverts the direction", async ({
   await expect
     .poll(async () => {
       const v = await page.locator("#amount").inputValue();
-      return Number(v.replace(/\s/g, "").replace(",", "."));
+      return Number(v.replace(/[\s,]/g, ""));
     })
     .toBeCloseTo(1792.11, 1);
   await page.locator("#swap").click();
@@ -184,6 +184,22 @@ test("toggles a debug log bottom sheet", async ({ page }) => {
   await debugNav.click();
   await expect(panel).toBeHidden();
   await expect(debugNav).toHaveAttribute("aria-pressed", "false");
+});
+
+test("text inputs keep at least 16px font to avoid iOS focus zoom", async ({
+  page,
+}) => {
+  await mockCoinbase(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const px = (id: string) =>
+    page.evaluate(
+      (el) => parseFloat(getComputedStyle(document.getElementById(el)!).fontSize),
+      id,
+    );
+  expect(await px("amount")).toBeGreaterThanOrEqual(16);
+  expect(await px("result")).toBeGreaterThanOrEqual(16);
+  expect(await px("design-background-hex")).toBeGreaterThanOrEqual(16);
 });
 
 test("main page has no glance strip or bank fee", async ({ page }) => {

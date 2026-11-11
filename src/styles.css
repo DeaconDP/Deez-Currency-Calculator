@@ -820,7 +820,7 @@ select:focus-visible,
 
 .design-color-row input[type="text"] {
   min-height: 44px;
-  font-size: calc(0.48rem * var(--ui-scale));
+  font-size: max(16px, calc(0.48rem * var(--ui-scale)));
   text-transform: uppercase;
 }
 
