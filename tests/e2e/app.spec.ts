@@ -325,6 +325,20 @@ test("pasted prices in either format keep their value (en-US)", async ({ page })
   await expect(page.locator("#result")).toHaveValue("69.78");
 });
 
+test("pasting text with several numbers keeps the first one", async ({ page }) => {
+  await mockCoinbase(page);
+  await page.goto("/");
+  const amount = page.locator("#amount");
+  await amount.focus();
+  await page.evaluate(() => {
+    const el = document.getElementById("amount") as HTMLInputElement;
+    el.value = "Total: 1,250.50 (15% VAT)";
+    el.dispatchEvent(new InputEvent("input", { inputType: "insertFromPaste", bubbles: true }));
+  });
+  await expect(amount).toHaveValue("1,250.50");
+  await expect(page.locator("#result")).toHaveValue("69.78");
+});
+
 test("a 13th whole digit is refused with TOO LONG", async ({ page }) => {
   await mockCoinbase(page);
   await page.goto("/");

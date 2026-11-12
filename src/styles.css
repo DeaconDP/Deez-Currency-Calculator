@@ -358,7 +358,8 @@ button {
   border-color: var(--focus);
 }
 
-.well.is-invalid {
+.well.is-invalid,
+.well.is-invalid:focus-within {
   border-color: var(--error);
 }
 
@@ -562,7 +563,7 @@ button {
   width: 28px;
   height: 28px;
   margin: -6px -6px -6px 4px;
-  color: var(--text);
+  color: var(--control-text);
   background: var(--control);
   border: 2px solid var(--edge);
   box-shadow:
@@ -609,6 +610,10 @@ button {
 
 .status[data-kind="error"] .status-hint {
   color: var(--text);
+}
+
+.foot span {
+  white-space: nowrap;
 }
 
 .foot {
@@ -765,9 +770,17 @@ dialog.sheet::backdrop {
 }
 
 .currency-recents {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   flex: none;
-  padding: 16px var(--gutter) 12px;
+  padding: 12px var(--gutter) 16px;
   border-bottom: 2px solid var(--line);
+}
+
+.currency-recents .group-label {
+  margin: 0;
+  flex: none;
 }
 
 .recents-row {

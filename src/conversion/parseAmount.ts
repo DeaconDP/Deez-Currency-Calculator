@@ -30,7 +30,19 @@ export function parseAmount(input: string, decimalSeparator?: "." | ","): ParseR
   const value = input.trim();
   if (!value) return { valid: false, reason: "empty" };
   if (/[eE+-]/.test(value) || /(?:Infinity|NaN)/i.test(value)) return INVALID;
-  let compact = value.replace(/[\s  '’]/g, "");
+  // Spaces (and Swiss apostrophes) only ever group thousands: "1 250,50" yes,
+  // "2 19.99" or "50 100" no — those are two numbers, not one.
+  const chunks = value.split(/[\s\u00a0\u202f'’]+/);
+  if (
+    chunks.length > 1 &&
+    !(
+      /^\d{1,3}$/.test(chunks[0]) &&
+      chunks.slice(1, -1).every((c) => /^\d{3}$/.test(c)) &&
+      /^\d{3}(?:[.,]\d*)?$/.test(chunks[chunks.length - 1])
+    )
+  )
+    return INVALID;
+  let compact = chunks.join("");
   if (/^[.,]/.test(compact)) compact = `0${compact}`; // ".5" → "0.5"
 
   const dots = count(compact, ".");
@@ -48,8 +60,13 @@ export function parseAmount(input: string, decimalSeparator?: "." | ","): ParseR
     const sep = dots ? "." : ",";
     const n = dots || commas;
     if (decimalSeparator && sep === decimalSeparator) {
-      if (n > 1) return INVALID; // "1.5.5" is a typo, not 155
-      normalized = compact.replace(sep, ".");
+      if (n > 1) {
+        // "1,234,567" on a comma-decimal phone can only be grouping; "1.5.5" is a typo
+        if (!isGrouped(compact, sep)) return INVALID;
+        normalized = compact.split(sep).join("");
+      } else {
+        normalized = compact.replace(sep, ".");
+      }
     } else if (decimalSeparator) {
       if (isGrouped(compact, sep)) normalized = compact.split(sep).join("");
       else if (n === 1) normalized = compact.replace(sep, "."); // foreign decimal point

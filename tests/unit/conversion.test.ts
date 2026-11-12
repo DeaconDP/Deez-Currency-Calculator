@@ -41,6 +41,21 @@ describe("amount parsing", () => {
     );
   });
 
+  it.each(["2 19.99", "1,250.50 15", "12 34", "1 25"])(
+    "rejects %s (two numbers, not one)",
+    (input) => expect(parseAmount(input, ".").valid).toBe(false),
+  );
+  it.each([
+    ["1'234.5", ".", "1234.5"],
+    ["1 234 567,5", ",", "1234567.5"],
+  ] as const)("accepts grouped %s", (input, sep, expected) =>
+    expect(parseAmount(input, sep)).toEqual({ valid: true, normalized: expected }),
+  );
+  it("reads space-grouped 50 100 as fifty thousand one hundred", () =>
+    expect(parseAmount("50 100", ",")).toEqual({ valid: true, normalized: "50100" }));
+  it("reads a US-grouped 1,234,567 on a comma-decimal phone", () =>
+    expect(parseAmount("1,234,567", ",")).toEqual({ valid: true, normalized: "1234567" }));
+
   describe("with a dot-decimal locale (en-US)", () => {
     it.each([
       ["1,250", "1250"],

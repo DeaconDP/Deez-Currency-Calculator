@@ -290,7 +290,7 @@ app.innerHTML = `
       <p id="main-error" class="sr-only" role="alert"></p>
       <p id="announce" class="sr-only" role="status" aria-live="polite"></p>
     </section>
-    <footer class="foot">MID-MARKET RATES · NO FEES ADDED · DATA: COINBASE</footer>
+    <footer class="foot"><span>MID-MARKET RATES</span> · <span>NO FEES ADDED</span> · <span>DATA: COINBASE</span></footer>
   </main>
   ${
     tipsAllowed
@@ -405,6 +405,7 @@ function selectAllOnFocus(input: HTMLInputElement) {
   let typed = false;
   input.addEventListener("focus", () => {
     focusing = true;
+    window.setTimeout(() => (focusing = false), 500); // keyboard focus: no click follows
     typed = false;
     markReplacing();
     // WebKit can drop a selection made during focus; redo it next frame,
@@ -560,7 +561,7 @@ function renderConversion() {
   // VoiceOver doesn't re-read aria-describedby, so speak a new error once
   if (sourceError.textContent && sourceError.textContent !== previousError)
     say(sourceError.textContent === "TOO LONG" ? "Too long" : "Numbers only");
-  sourceInput.closest(".well")!.classList.toggle("is-invalid", invalid);
+  sourceInput.closest(".well")!.classList.toggle("is-invalid", invalid || clipped);
   drivenInput.closest(".well")!.classList.remove("is-invalid");
 
   if (sourceInput.value && parsed.valid && rate && drivenCurrency) {
@@ -704,7 +705,7 @@ function renderStatus() {
       break;
     case "fresh":
       label = "LIVE";
-      hint = "";
+      hint = lastFetchFailed ? "COULDN'T UPDATE · TAP TO RETRY" : "";
       break;
     case "stale":
       label = "CACHED";
@@ -929,15 +930,24 @@ function applyCurrencyPick(code: string) {
 
 /* ---------- events: converter ---------- */
 
-amount.addEventListener("input", () => {
+/** A paste like "R50 - R100" or "Total: 1,250.50 (15% VAT)" keeps its first number. */
+function firstNumberOnPaste(input: HTMLInputElement, event: Event) {
+  if ((event as InputEvent).inputType !== "insertFromPaste") return;
+  const match = /\d[\d.,\s\u00a0\u202f'’]*\d|\d/.exec(input.value);
+  if (match) input.value = match[0];
+}
+
+amount.addEventListener("input", (event) => {
   clipped = false;
+  firstNumberOnPaste(amount, event);
   sanitize(amount);
   source = "top";
   renderConversion();
   announce();
 });
-result.addEventListener("input", () => {
+result.addEventListener("input", (event) => {
   clipped = false;
+  firstNumberOnPaste(result, event);
   sanitize(result);
   source = "bottom";
   renderConversion();
@@ -1190,6 +1200,8 @@ document.addEventListener("visibilitychange", () => {
 window.setInterval(() => {
   if (table && status === "fresh" && !isFresh(table.fetchedAt)) status = "stale";
   renderStatus();
+  // keep rates current while the app is open and in front
+  if (document.visibilityState === "visible" && table && !isFresh(table.fetchedAt)) void loadRates();
 }, 60_000);
 
 if (!isTauri) {
