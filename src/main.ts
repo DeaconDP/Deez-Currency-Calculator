@@ -1352,6 +1352,28 @@ byId("debug-open").addEventListener("click", () => {
   debugPanel.querySelector<HTMLElement>(".close")?.focus({ preventScroll: true });
 });
 
+/* ---------- Android back button ---------- */
+
+// Back closes the top sheet, then the keypad, and only then leaves the app
+// (by default it quit straight away, even with Settings open).
+if (isTauri && tauriPlatform === "android") {
+  void import("@tauri-apps/api/app").then(({ onBackButtonPress, exit }) =>
+    onBackButtonPress(() => {
+      const sheets: [HTMLDialogElement | null, () => void][] = [
+        [debugPanel, () => debugPanel.close()],
+        [currencyPicker, closeCurrencyPicker],
+        [designDialog, () => designDialog.close()],
+        [tipDialog, () => tipDialog?.close()],
+      ];
+      const open = sheets.find(([d]) => d?.open);
+      if (open) return open[1]();
+      const active = document.activeElement;
+      if (active === amount || active === result) return (active as HTMLInputElement).blur();
+      void exit(0);
+    }),
+  );
+}
+
 /* ---------- diagnostics ---------- */
 
 async function copyText(text: string) {
