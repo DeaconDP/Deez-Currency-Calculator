@@ -1,6 +1,6 @@
 // App Store screenshots at the exact store sizes (WebKit, iOS build flags).
 // Usage: TAURI_ENV_PLATFORM=ios pnpm dev --port 5199 &  node scripts/store-shots.mjs [outRoot] [baseUrl]
-// Writes <outRoot>/iphone-6.9/*.png (1320x2868) and <outRoot>/ipad-13/*.png (2048x2732).
+// Writes <outRoot>/iphone-6.9/*.jpg (1320x2868) and <outRoot>/ipad-13/*.jpg (2048x2732).
 import { webkit } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -41,7 +41,8 @@ for (const d of devices) {
   });
   const shot = async (name) => {
     await page.waitForTimeout(600); // let tally/ping animations settle
-    await page.screenshot({ path: join(out, `${d.prefix}-${name}.png`) });
+    // JPEG: App Store screenshots must not have an alpha channel
+    await page.screenshot({ path: join(out, `${d.prefix}-${name}.jpg`), type: "jpeg", quality: 100 });
   };
   await page.goto(base);
   await page.waitForFunction(() => document.querySelector("#result")?.value);
