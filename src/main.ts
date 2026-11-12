@@ -241,6 +241,7 @@ const leg = (
     <span class="leg-label" aria-hidden="true"><span class="leg-role" id="${inputId}-role"></span><span class="leg-name" id="${inputId}-name"></span></span>
     <div class="leg-row">
       <div class="well">
+        <button id="${inputId}-done" class="done-btn" type="button" aria-label="Done, close keypad" hidden>DONE</button>
         <input id="${inputId}" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" maxlength="28" placeholder="--" value="${value}" aria-describedby="${inputId}-error">
       </div>
       <button id="${triggerId}" class="currency-trigger" type="button" aria-haspopup="dialog" aria-controls="currency-picker">
@@ -251,7 +252,6 @@ const leg = (
     <span class="leg-aside">
       <span id="${inputId}-error" class="field-error"></span>
       <button id="${inputId}-copy" class="copy-btn" type="button" hidden>COPY</button>
-      <button id="${inputId}-done" class="copy-btn done-btn" type="button" aria-label="Done, close keypad" hidden>DONE</button>
     </span>
     <span id="${inputId}-sats" class="leg-sats" hidden></span>
   </div>`;
@@ -457,7 +457,16 @@ function selectAllOnFocus(input: HTMLInputElement) {
     pendingFrom = -1;
     disarm();
   });
-  input.addEventListener("blur", disarm);
+  input.addEventListener("blur", () => {
+    disarm();
+    // a selection left in a blurred field keeps Android's Copy/Share bar up
+    window.getSelection()?.removeAllRanges();
+    try {
+      input.setSelectionRange(0, 0);
+    } catch {
+      /* ignore */
+    }
+  });
   input.addEventListener("click", () => {
     if (focusing) focusing = false; // the tap that focused it
     else disarm(); // a second tap places the caret
@@ -777,10 +786,7 @@ function ungroupOnFocus(input: HTMLInputElement) {
   const parsed = parse(input.value);
   if (!parsed.valid) return;
   const plain = parsed.normalized.replace(".", decimalSeparator);
-  if (plain !== input.value) {
-    input.value = plain;
-    input.select(); // rewriting the value drops the tap-to-replace selection
-  }
+  if (plain !== input.value) input.value = plain; // replace is armed separately; no native selection
   fitInput(input);
 }
 

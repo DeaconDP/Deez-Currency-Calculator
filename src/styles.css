@@ -1358,9 +1358,37 @@ button.list-row:active {
   text-wrap: balance;
 }
 
+/* DONE lives inside the amount window (left of the number): Android's
+   Cut/Copy bar appears above the text and could cover anything over it */
 .done-btn {
-  color: var(--text);
-  border-color: var(--text);
+  position: relative;
+  flex: none;
+  order: -1;
+  height: 32px;
+  padding: 2px 8px 0;
+  background: var(--control);
+  color: var(--control-text);
+  border: 2px solid var(--edge);
+  box-shadow: inset 2px 2px 0 var(--hi), inset -2px -2px 0 var(--lo);
+  font-size: 8px;
+  line-height: 16px;
+}
+
+.done-btn::after {
+  content: "";
+  position: absolute;
+  inset: -8px -6px;
+}
+
+.done-btn:active {
+  background: var(--money);
+  color: var(--on-money);
+}
+
+.well.is-replacing .done-btn {
+  background: var(--on-money);
+  color: var(--money);
+  border-color: var(--on-money);
 }
 
 .copy-btn {
