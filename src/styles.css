@@ -87,6 +87,19 @@ button {
   display: none !important;
 }
 
+/* content scrolling under the status bar gets a solid backdrop */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top);
+  background: var(--background);
+  z-index: 5;
+  pointer-events: none;
+}
+
 :focus {
   outline: none;
 }
@@ -802,9 +815,8 @@ dialog.sheet::backdrop {
 }
 
 .currency-recents {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+  display: grid;
+  gap: 8px;
   flex: none;
   padding: 12px var(--gutter) 16px;
   border-bottom: 2px solid var(--line);
@@ -1445,6 +1457,10 @@ button.list-row:active {
     color: var(--on-money);
     text-shadow: none;
   }
+  25%,
+  75% {
+    color: var(--money);
+  }
 }
 
 /* answer tally: a deeper score-counter shadow while it counts */
@@ -1510,4 +1526,8 @@ button.list-row:active {
   #update-toast {
     zoom: 2;
   }
+}
+
+:root[data-look="high-contrast"] .pair-chip .icon-arrow {
+  color: var(--control-text);
 }

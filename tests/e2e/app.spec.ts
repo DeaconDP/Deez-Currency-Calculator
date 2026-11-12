@@ -197,12 +197,35 @@ test("shows the pair rate and freshness, and refreshes on tap", async ({ page })
   await expect.poll(() => api.requests).toBeGreaterThan(before);
 });
 
-test("shows a retryable error when rates can't load", async ({ page }) => {
+test("a failed network reads as OFFLINE, even when the browser claims to be online", async ({ page }) => {
   await page.route("https://api.coinbase.com/**", (route) => route.abort());
   await page.goto("/");
   const status = page.locator("#rate-status");
-  await expect(status).toHaveAttribute("data-kind", "error");
+  await expect(status).toHaveAttribute("data-kind", "offline");
+  await expect(status).toContainText("OFFLINE");
   await expect(status).toContainText("TAP TO RETRY");
+});
+
+test("a provider error shows a retryable NO RATES", async ({ page }) => {
+  await page.route("https://api.coinbase.com/**", (route) => route.fulfill({ status: 500, body: "" }));
+  await page.goto("/");
+  const status = page.locator("#rate-status");
+  await expect(status).toHaveAttribute("data-kind", "error");
+  await expect(status).toContainText("CAN'T REACH COINBASE · TAP TO RETRY");
+});
+
+test("a tap arms replace without a native selection; the first key replaces", async ({ page }) => {
+  await mockCoinbase(page);
+  await page.goto("/");
+  const amount = page.locator("#amount");
+  await amount.click();
+  await expect(page.locator('[data-leg="top"] .well')).toHaveClass(/is-replacing/);
+  const sel = await amount.evaluate((el: HTMLInputElement) => [el.selectionStart, el.selectionEnd, el.value.length]);
+  expect(sel[0]).toBe(sel[2]); // caret at the end, nothing selected
+  expect(sel[1]).toBe(sel[2]);
+  await page.keyboard.type("42");
+  await expect(amount).toHaveValue("42");
+  await expect(page.locator("#result")).toHaveValue(/^2[.,]34$/);
 });
 
 test("picker search filters, and picking the other side swaps the pair", async ({ page }) => {

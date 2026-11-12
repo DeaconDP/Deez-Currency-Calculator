@@ -53,6 +53,8 @@ let table: RateTable | null = null;
 let status: AppStatus = "loading";
 let lastError = "None";
 let lastFetchFailed = false;
+let lastFetchOffline = false; // the network itself failed (WebView keeps navigator.onLine true)
+const online = () => navigator.onLine && !lastFetchOffline;
 let requestDuration: number | null = null;
 let abortController: AbortController | null = null;
 let deferredInstall: BeforeInstallPromptEvent | null = null;
@@ -408,41 +410,77 @@ const designDialog = byId<HTMLDialogElement>("design-dialog");
 const designOpen = byId<HTMLButtonElement>("design-open");
 
 /**
- * Select all on focus so a tap is ready to replace. The native highlight
- * renders muddy over the pixel digits, so the well itself inverts instead
- * (.is-replacing) until you type, tap again to place the caret, or leave.
+ * Tap-to-replace. A tap on an amount arms "replace": the well inverts, the
+ * caret sits at the end, and the first keystroke replaces the whole value.
+ * No native selection is made, so Android never raises its Cut/Copy/Read-aloud
+ * bar over DONE or COPY. A second tap places the caret to edit in place.
  */
 function selectAllOnFocus(input: HTMLInputElement) {
   const well = input.closest(".well")!;
   let focusing = false;
-  const markReplacing = () => {
-    input.select();
-    well.classList.toggle("is-replacing", Boolean(input.value));
+  let armed = false;
+  let pendingFrom = -1; // value length when an armed append began
+  const disarm = () => {
+    armed = false;
+    well.classList.remove("is-replacing");
   };
-  let typed = false;
+  const arm = () => {
+    armed = Boolean(input.value);
+    well.classList.toggle("is-replacing", armed);
+    const end = input.value.length;
+    try {
+      input.setSelectionRange(end, end);
+    } catch {
+      /* some input modes refuse selection APIs */
+    }
+  };
   input.addEventListener("focus", () => {
     focusing = true;
     window.setTimeout(() => (focusing = false), 500); // keyboard focus: no click follows
-    typed = false;
-    markReplacing();
-    // WebKit can drop a selection made during focus; redo it next frame,
-    // unless typing already started (it would swallow the first keystroke)
+    arm();
     requestAnimationFrame(() => {
-      if (!typed && document.activeElement === input) markReplacing();
+      if (armed && document.activeElement === input) arm();
     });
   });
-  const stop = () => well.classList.remove("is-replacing");
-  input.addEventListener("input", () => {
-    typed = true;
-    stop();
+  // Runs before the converter's own input handler (registered first).
+  input.addEventListener("beforeinput", (event) => {
+    if (!armed) return;
+    const end = input.value.length;
+    const atEnd = input.selectionStart === end && input.selectionEnd === end;
+    // a real full selection (e.g. select-all, or a test's fill) needs no help
+    pendingFrom = atEnd ? end : -1;
+    if (atEnd && event.inputType.startsWith("delete")) pendingFrom = -2;
   });
-  input.addEventListener("blur", stop);
+  input.addEventListener("input", () => {
+    if (pendingFrom === -2) input.value = "";
+    else if (pendingFrom >= 0) input.value = input.value.slice(pendingFrom);
+    pendingFrom = -1;
+    disarm();
+  });
+  input.addEventListener("blur", disarm);
   input.addEventListener("click", () => {
     if (focusing) focusing = false; // the tap that focused it
-    else stop(); // a second tap places the caret
+    else disarm(); // a second tap places the caret
   });
-  // Desktop browsers clear selection on mouseup after focus; keep it.
-  input.addEventListener("mouseup", (event) => event.preventDefault());
+  // Android selects the tapped number itself (smart selection) and raises its
+  // Cut/Copy bar over DONE. While armed, collapse any selection to the end:
+  // a collapsed selection dismisses that bar.
+  const collapse = () => {
+    if (!armed || document.activeElement !== input) return;
+    const end = input.value.length;
+    if (input.selectionStart !== end || input.selectionEnd !== end) {
+      try {
+        input.setSelectionRange(end, end);
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+  input.addEventListener("select", collapse);
+  document.addEventListener("selectionchange", collapse);
+  input.addEventListener("focus", () => {
+    for (const ms of [120, 300, 600]) window.setTimeout(collapse, ms);
+  });
 }
 selectAllOnFocus(amount);
 selectAllOnFocus(result);
@@ -614,7 +652,7 @@ function renderConversion() {
     // empty, invalid or no rate: never leave a stale number standing
     drivenInput.value = "";
     if (sourceInput.value && parsed.valid && !rate && status !== "loading" && status !== "refreshing")
-      drivenError.textContent = table ? "NO RATE" : navigator.onLine ? "NO DATA" : "OFFLINE";
+      drivenError.textContent = table ? "NO RATE" : online() ? "NO DATA" : "OFFLINE";
   }
 
   tallyNext = false;
@@ -769,7 +807,7 @@ function renderStatus() {
   const pairRate = table?.rates[toCode] ?? null;
   const refreshing = status === "loading" || status === "refreshing";
   const line = describeStatus(table, Date.now(), {
-    online: navigator.onLine,
+    online: online(),
     pairRate,
     fromCode,
     toCode,
@@ -877,7 +915,7 @@ async function loadRates(force = false, userAsked = false) {
   const willFetch = force || !cached || !isFresh(cached.fetchedAt);
   if (cached) {
     table = cached;
-    status = !navigator.onLine
+    status = !online()
       ? "offline"
       : willFetch
         ? "refreshing" // a fetch follows: don't flash SAVED in between
@@ -904,16 +942,21 @@ async function loadRates(force = false, userAsked = false) {
     status = "fresh";
     lastError = "None";
     lastFetchFailed = false;
+    lastFetchOffline = false;
     tallyNext = changed && userAsked;
     pingLive();
     log(`Loaded ${Object.keys(loaded.rates).length} valid rates`);
   } catch (error) {
     if (own.signal.aborted) return;
     lastFetchFailed = true;
+    lastFetchOffline =
+      !navigator.onLine ||
+      error instanceof TypeError ||
+      (error instanceof Error && /timed out/i.test(error.message));
     lastError =
       error instanceof Error ? error.message : "Rates are temporarily unavailable.";
-    if (table) status = navigator.onLine ? "stale" : "offline";
-    else status = navigator.onLine ? "error" : "offline";
+    if (!online()) status = "offline";
+    else status = table ? "stale" : "error";
     log(lastError);
   }
   renderConversion();
@@ -1344,7 +1387,13 @@ designDialog.querySelectorAll<HTMLButtonElement>("[data-preset]").forEach((btn) 
 });
 byId("settings-refresh").addEventListener("click", () => void refreshByUser());
 
-wireSheet(debugPanel);
+// Diagnostics is opened from Settings, so closing it goes back there
+const closeDiagnostics = () => {
+  debugPanel.close();
+  syncDesignControls();
+  designDialog.showModal();
+};
+wireSheet(debugPanel, closeDiagnostics);
 byId("debug-open").addEventListener("click", () => {
   designDialog.close();
   renderDebug();
@@ -1360,7 +1409,7 @@ if (isTauri && tauriPlatform === "android") {
   void import("@tauri-apps/api/app").then(({ onBackButtonPress, exit }) =>
     onBackButtonPress(() => {
       const sheets: [HTMLDialogElement | null, () => void][] = [
-        [debugPanel, () => debugPanel.close()],
+        [debugPanel, closeDiagnostics],
         [currencyPicker, closeCurrencyPicker],
         [designDialog, () => designDialog.close()],
         [tipDialog, () => tipDialog?.close()],
@@ -1393,7 +1442,7 @@ function renderDebug() {
   const rows: [string, string][] = [
     ["Version", __APP_VERSION__],
     ["Shell", isTauri ? `Tauri ${tauriPlatform || "desktop"}` : "Browser"],
-    ["Connection", navigator.onLine ? "Online" : "Offline"],
+    ["Connection", online() ? "Online" : "Offline"],
     ["Provider", table?.provider ?? "Coinbase"],
     ["Base", fromCode],
     ["Rates", String(table ? Object.keys(table.rates).length : 0)],
@@ -1484,6 +1533,10 @@ if (!isTauri) {
 const TEXT_KEY = "deac-currency-large-text";
 /** iOS reports the Dynamic Type size through -apple-system-body (17px by default). */
 function systemPrefersLargeText() {
+  // Android: MainActivity pins WebView text zoom to 100% (pixel grid) and
+  // reports the system font scale in the user agent instead.
+  const androidScale = /DeacsFontScale\/([\d.]+)/.exec(navigator.userAgent);
+  if (androidScale) return Number(androidScale[1]) >= 1.15;
   const probe = document.createElement("span");
   probe.style.cssText = "font: -apple-system-body; position: absolute; visibility: hidden;";
   document.body.append(probe);
