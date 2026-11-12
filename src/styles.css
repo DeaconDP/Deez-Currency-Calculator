@@ -1490,3 +1490,24 @@ button.list-row:active {
   font-weight: 400;
   color: var(--money);
 }
+
+/* Tablets: draw the UI at exactly 2x. The art is on an 8px grid, so an integer
+   zoom keeps every pixel crisp and fills the screen like the phone. Dialog boxes
+   stay unzoomed (WebKit mis-positions zoomed top-layer dialogs); their contents zoom. */
+@media (pointer: coarse) and (min-width: 768px) and (min-height: 900px) {
+  .shell {
+    zoom: 2;
+    min-height: 50vh;
+    min-height: 50dvh;
+  }
+
+  dialog.sheet {
+    max-width: 960px;
+    height: 90vh;
+  }
+
+  dialog.sheet > *,
+  #update-toast {
+    zoom: 2;
+  }
+}
