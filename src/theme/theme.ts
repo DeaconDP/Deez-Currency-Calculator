@@ -1,6 +1,7 @@
 import type { DesignFont, DesignPresetId, DesignTheme } from "../types";
 
-const THEME_KEY = "deac-currency-design-v1";
+// v2: 2026-11 redesign; v1 custom themes (white controls, radii) are dropped.
+const THEME_KEY = "deac-currency-design-v2";
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 const NAMED_PRESETS: Exclude<DesignPresetId, "custom">[] = [
@@ -13,18 +14,18 @@ const NAMED_PRESETS: Exclude<DesignPresetId, "custom">[] = [
 
 export const DEFAULT_DESIGN_THEME: DesignTheme = {
   presetId: "default",
-  background: "#000000",
-  surface: "#111111",
-  control: "#ffffff",
-  controlText: "#757575",
-  text: "#ffffff",
-  muted: "#757575",
-  money: "#ffd400",
+  background: "#0b0b14",
+  surface: "#16162a",
+  control: "#2a2a48",
+  controlText: "#f4f1e8",
+  text: "#f4f1e8",
+  muted: "#a3a1c2",
+  money: "#ffd23f",
   error: "#ff6b6b",
-  focus: "#62b8ff",
+  focus: "#ffd23f",
   uiScale: 1,
   font: "pixel",
-  radius: 10,
+  radius: 0,
   space: 1,
   controlHeight: 48,
 };
@@ -50,36 +51,34 @@ export const DESIGN_PRESETS: Record<
     control: "#ffffff",
     controlText: "#000000",
     text: "#ffffff",
-    muted: "#cccccc",
+    muted: "#e6e6e6",
     money: "#ffff00",
-    error: "#ff4444",
-    focus: "#ffffff",
+    error: "#ff6666",
+    focus: "#ffff00",
   },
+  // Shown as "GAMEBOY"; the id stays "soft" for compatibility.
   soft: {
     ...DEFAULT_DESIGN_THEME,
     presetId: "soft",
-    background: "#1a1a1a",
-    surface: "#252525",
-    control: "#f0f0f0",
-    controlText: "#666666",
-    text: "#f5f5f5",
-    muted: "#999999",
-    money: "#e8c84a",
-    error: "#e88a8a",
-    focus: "#7eb8e0",
-    radius: 16,
-    space: 1.1,
-    controlHeight: 52,
+    background: "#0f380f",
+    surface: "#1e4a1e",
+    control: "#306230",
+    controlText: "#e0f8cf",
+    text: "#e0f8cf",
+    muted: "#9bbc0f",
+    money: "#c4f04a",
+    error: "#ffb0a0",
+    focus: "#c4f04a",
   },
   neon: {
     ...DEFAULT_DESIGN_THEME,
     presetId: "neon",
-    background: "#050510",
-    surface: "#0a0a1a",
-    control: "#e8e8ff",
-    controlText: "#3a3a6a",
+    background: "#07071a",
+    surface: "#12123a",
+    control: "#26206a",
+    controlText: "#f0e8ff",
     text: "#b8fff0",
-    muted: "#6a8a9a",
+    muted: "#9aa8d8",
     money: "#00ff88",
     error: "#ff2d6a",
     focus: "#ff00ff",
@@ -175,6 +174,14 @@ export function saveDesignTheme(theme: DesignTheme) {
     /* unavailable storage is non-fatal */
   }
 }
+
+/** Presets offered in Settings, with their display names. */
+export const LOOK_PRESETS: { id: Exclude<DesignPresetId, "custom">; label: string }[] = [
+  { id: "default", label: "NIGHT" },
+  { id: "neon", label: "ARCADE" },
+  { id: "soft", label: "GAMEBOY" },
+  { id: "high-contrast", label: "CONTRAST" },
+];
 
 export function applyTheme(
   theme: DesignTheme,

@@ -8,9 +8,17 @@ export function formatResult(
   const number = Number(value);
   if (!Number.isFinite(number)) return value;
   if (new Big(value).eq(0)) return "0";
-  let maximumFractionDigits =
-    currency.type === "crypto" ? 8 : Math.abs(number) < 0.01 ? 6 : 4;
-  maximumFractionDigits = Math.max(maximumFractionDigits, currency.decimals);
+  const abs = Math.abs(number);
+  // Crypto: up to 8 places. Fiat: the currency's own decimals (2 for ZAR, 0 for
+  // JPY), with more precision only for sub-unit amounts so they never read "0.00".
+  const maximumFractionDigits =
+    currency.type === "crypto"
+      ? Math.max(8, currency.decimals)
+      : abs < 0.01
+        ? 6
+        : abs < 1
+          ? Math.max(4, currency.decimals)
+          : currency.decimals;
   return new Intl.NumberFormat(undefined, {
     maximumFractionDigits,
     useGrouping: true,

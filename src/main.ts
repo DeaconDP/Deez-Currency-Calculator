@@ -2,7 +2,8 @@ import "./styles.css";
 import { registerSW } from "virtual:pwa-register";
 import { CoinbaseProvider } from "./api/coinbase";
 import { calculate, calculateInverse } from "./conversion/calculate";
-import { formatResult } from "./conversion/format";
+import { describeStatus } from "./conversion/describeStatus";
+import { formatRate, formatResult } from "./conversion/format";
 import { parseAmount } from "./conversion/parseAmount";
 import { tipDestinations } from "./config/tips";
 import { currencies, getCurrency } from "./data/currencies";
@@ -15,8 +16,7 @@ import {
   setCachedRates,
 } from "./storage/storage";
 import {
-  DEFAULT_DESIGN_THEME,
-  NAMED_PRESETS,
+  LOOK_PRESETS,
   applyTheme,
   getPresetTheme,
   loadDesignTheme,
@@ -54,7 +54,6 @@ let lastError = "None";
 let requestDuration: number | null = null;
 let abortController: AbortController | null = null;
 let deferredInstall: BeforeInstallPromptEvent | null = null;
-let debugOpen = false;
 let source: "top" | "bottom" = prefs.source;
 const logs: string[] = [];
 
@@ -63,21 +62,93 @@ let fromCode = prefs.from;
 let toCode = prefs.to;
 let currencyPickerTarget: "from" | "to" | null = null;
 
-const currencyPickerListMarkup = ["fiat", "crypto"]
+/* ---------- pixel icons (drawn on a grid, rendered with crisp edges) ---------- */
+
+function pixelIcon(
+  grid: number,
+  size: number,
+  rects: [number, number, number, number][],
+  cls: string,
+) {
+  const body = rects
+    .map(([x, y, w, h]) => `<rect x="${x}" y="${y}" width="${w}" height="${h}"/>`)
+    .join("");
+  return `<svg class="px-icon ${cls}" viewBox="0 0 ${grid} ${grid}" width="${size}" height="${size}" shape-rendering="crispEdges" fill="currentColor" aria-hidden="true">${body}</svg>`;
+}
+
+const gearIcon = pixelIcon(
+  16,
+  32,
+  [
+    [7, 0, 2, 3], [7, 13, 2, 3], [0, 7, 3, 2], [13, 7, 3, 2],
+    [2, 2, 2, 2], [12, 2, 2, 2], [2, 12, 2, 2], [12, 12, 2, 2],
+    [4, 4, 8, 2], [4, 10, 8, 2], [4, 4, 2, 8], [10, 4, 2, 8],
+  ],
+  "icon-gear",
+);
+const heartIcon = pixelIcon(
+  8,
+  32,
+  [
+    [1, 1, 2, 1], [5, 1, 2, 1], [0, 2, 8, 2], [1, 4, 6, 1], [2, 5, 4, 1], [3, 6, 2, 1],
+  ],
+  "icon-heart",
+);
+const flipIcon = pixelIcon(
+  16,
+  32,
+  [
+    // up arrow (left)
+    [4, 2, 2, 1], [3, 3, 4, 1], [2, 4, 6, 1], [4, 5, 2, 9],
+    // down arrow (right)
+    [10, 2, 2, 9], [8, 11, 6, 1], [9, 12, 4, 1], [10, 13, 2, 1],
+  ],
+  "icon-flip",
+);
+const chevronIcon = pixelIcon(
+  8,
+  16,
+  [[1, 2, 6, 1], [2, 3, 4, 1], [3, 4, 2, 1]],
+  "icon-chevron",
+);
+const closeIcon = pixelIcon(
+  8,
+  16,
+  [
+    [1, 1, 2, 1], [5, 1, 2, 1], [2, 2, 2, 1], [4, 2, 2, 1], [3, 3, 2, 2],
+    [2, 5, 2, 1], [4, 5, 2, 1], [1, 6, 2, 1], [5, 6, 2, 1],
+  ],
+  "icon-close",
+);
+const checkIcon = pixelIcon(
+  8,
+  16,
+  [[6, 1, 1, 1], [5, 2, 2, 1], [4, 3, 2, 1], [0, 3, 1, 1], [0, 4, 2, 1], [1, 5, 4, 1], [2, 6, 2, 1]],
+  "icon-check",
+);
+const rightIcon = pixelIcon(8, 16, [[2, 1, 1, 6], [3, 2, 1, 4], [4, 3, 1, 2]], "icon-right");
+
+/* ---------- markup ---------- */
+
+const upper = (s: string) => s.toUpperCase();
+
+const currencyPickerListMarkup = (["fiat", "crypto"] as const)
   .map((type) => {
-    const label = type === "fiat" ? "Fiat currencies" : "Cryptocurrencies";
+    const label = type === "fiat" ? "Fiat" : "Crypto";
     const rows = currencies
       .filter((c) => c.type === type)
       .map(
         (c) =>
-          `<button type="button" class="currency-option" data-code="${c.code}" aria-label="${c.code} ${c.name}">
-            <span class="currency-option-code">${c.code}</span>
-            <span class="currency-option-name">${c.name}</span>
+          `<button type="button" class="currency-option" data-code="${c.code}" data-search="${c.code.toLowerCase()} ${c.name.toLowerCase()}" aria-label="${c.code} ${c.name}">
+            <span class="opt-code">${c.code}</span>
+            <span class="opt-name">${upper(c.name)}</span>
+            <span class="opt-tag" aria-hidden="true">SWAP</span>
+            ${checkIcon}
           </button>`,
       )
       .join("");
-    return `<section class="currency-group" aria-label="${label}">
-      <h3 class="currency-group-label">${label}</h3>
+    return `<section class="currency-group" aria-label="${label} currencies">
+      <h3 class="group-label">${upper(label)}</h3>
       <div class="currency-option-list">${rows}</div>
     </section>`;
   })
@@ -90,46 +161,45 @@ const tipCards = tipDestinations
   )
   .join("");
 
-type ColorKey =
-  | "background"
-  | "surface"
-  | "control"
-  | "controlText"
-  | "text"
-  | "muted"
-  | "money"
-  | "error"
-  | "focus";
+const lookMarkup = LOOK_PRESETS.map(({ id, label }) => {
+  const t = getPresetTheme(id);
+  return `<button type="button" class="look" role="radio" data-preset="${id}" aria-checked="${designTheme.presetId === id}" aria-label="${label} look">
+      <span class="look-swatch" aria-hidden="true">
+        <i style="background:${t.background}"></i><i style="background:${t.control}"></i><i style="background:${t.money}"></i>
+      </span>
+      <span class="look-name">${label}</span>
+    </button>`;
+}).join("");
 
-const colorFields: { key: ColorKey; label: string; id: string }[] = [
-  { key: "background", label: "Background", id: "design-background" },
-  { key: "surface", label: "Surface", id: "design-surface" },
-  { key: "control", label: "Controls", id: "design-control" },
-  { key: "controlText", label: "Control text", id: "design-control-text" },
-  { key: "text", label: "Text", id: "design-text" },
-  { key: "muted", label: "Muted", id: "design-muted" },
-  { key: "money", label: "Accent", id: "design-money" },
-  { key: "error", label: "Error", id: "design-error" },
-  { key: "focus", label: "Focus", id: "design-focus" },
-];
+const leg = (
+  which: "top" | "bottom",
+  inputId: "amount" | "result",
+  triggerId: "from-trigger" | "to-trigger",
+  code: string,
+  value: string,
+) => `
+  <div class="leg" data-leg="${which}">
+    <div class="leg-head">
+      <span class="leg-label" id="${inputId}-label"><span class="leg-dir">${which === "top" ? "FROM" : "TO"}</span><span class="leg-name" id="${inputId}-name"></span></span>
+      <span id="${inputId}-error" class="field-error"></span>
+    </div>
+    <div class="leg-row">
+      <div class="well">
+        <span class="approx" aria-hidden="true">≈</span>
+        <input id="${inputId}" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" value="${value}" aria-describedby="${inputId}-error">
+      </div>
+      <button id="${triggerId}" class="currency-trigger" type="button" aria-haspopup="dialog" aria-controls="currency-picker">
+        <span class="currency-trigger-code">${code}</span>
+        ${chevronIcon}
+      </button>
+    </div>
+  </div>`;
 
-const colorFieldMarkup = colorFields
-  .map(
-    ({ key, label, id }) => `
-      <div class="design-field">
-        <label for="${id}">${label}</label>
-        <div class="design-color-row">
-          <input id="${id}" type="color" value="${designTheme[key]}" data-theme-key="${key}" aria-label="${label} color">
-          <input id="${id}-hex" type="text" value="${designTheme[key]}" maxlength="7" spellcheck="false" data-theme-hex="${key}" aria-label="${label} hex">
-        </div>
-      </div>`,
-  )
-  .join("");
-
-const presetMarkup = NAMED_PRESETS.map(
-  (id) =>
-    `<button type="button" class="design-preset" data-preset="${id}" aria-pressed="${designTheme.presetId === id}">${id.replace("-", " ").toUpperCase()}</button>`,
-).join("");
+const sheetHead = (titleId: string, title: string, closeLabel: string) => `
+  <div class="sheet-head">
+    <h2 id="${titleId}" class="sheet-title">${title}</h2>
+    <button class="close" type="button" aria-label="${closeLabel}">${closeIcon}</button>
+  </div>`;
 
 app.innerHTML = `
   <main class="shell">
@@ -138,192 +208,124 @@ app.innerHTML = `
         ? `<p class="store-shell-banner" role="status">Store shell preview — tip donations hidden (App Store 3.1.1)</p>`
         : ""
     }
-    <div class="stage">
-      <header class="brand" aria-label="Deez Currency Calculator">
-        <h1><span>DEEZ</span><span>CURRENCY</span><span>CALCULATOR</span></h1>
-        <img class="brand-mark" src="/sprites/btc-chart.png" alt="" width="96" height="96">
-      </header>
-      <section class="converter" aria-labelledby="converter-title">
-        <h2 id="converter-title" class="sr-only">Currency calculator</h2>
-        <div class="conversion-grid">
-          <div class="row">
-            <div class="field amount-field">
-              <label class="sr-only" for="amount">Amount</label>
-              <input id="amount" inputmode="decimal" autocomplete="off" value="${prefs.amount}" aria-describedby="amount-error">
-              <span id="amount-error" class="error"></span>
-            </div>
-            <div class="field currency-field">
-              <button
-                id="from-trigger"
-                class="currency-trigger"
-                type="button"
-                aria-haspopup="dialog"
-                aria-controls="currency-picker"
-                aria-label="From currency ${prefs.from}"
-              >
-                <span class="currency-trigger-code">${prefs.from}</span>
-                <span class="currency-trigger-chevron" aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
-          <div class="swap-row">
-            <button id="swap" class="swap" type="button" aria-label="Invert amounts" title="Invert amounts">
-              <svg class="swap-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M7 3v18"/>
-                <path d="M3 7l4-4 4 4"/>
-                <path d="M17 21V3"/>
-                <path d="M13 17l4 4 4-4"/>
-              </svg>
-            </button>
-          </div>
-          <div class="row">
-            <div class="field amount-field">
-              <label class="sr-only" for="result">Converted amount</label>
-              <input id="result" inputmode="decimal" autocomplete="off" aria-live="polite" aria-describedby="result-error" value="${prefs.result}">
-              <span id="result-error" class="error"></span>
-            </div>
-            <div class="field currency-field">
-              <button
-                id="to-trigger"
-                class="currency-trigger"
-                type="button"
-                aria-haspopup="dialog"
-                aria-controls="currency-picker"
-                aria-label="To currency ${prefs.to}"
-              >
-                <span class="currency-trigger-code">${prefs.to}</span>
-                <span class="currency-trigger-chevron" aria-hidden="true"></span>
-              </button>
-            </div>
-          </div>
-        </div>
-        <p id="main-error" class="main-error" role="alert"></p>
-      </section>
-    </div>
-    <nav class="bottom-actions" aria-label="App actions">
-      <button id="debug-open" class="action debug" type="button" aria-pressed="false" aria-controls="debug-panel">
-        <img src="/sprites/debug-alien.png" alt="" width="40" height="34">
-        <span>DEBUG</span>
-      </button>
-      ${
-        tipsAllowed
-          ? `<button id="tip-open" class="action tip" type="button">
-        <img src="/sprites/tip-heart.png" alt="" width="40" height="34">
-        <span>TIP</span>
-      </button>`
-          : ""
-      }
-      <button id="design-open" class="action settings" type="button" aria-label="Design settings" aria-haspopup="dialog" aria-controls="design-dialog">
-        <span class="action-glyph" aria-hidden="true">
-          <svg class="settings-icon" viewBox="0 0 16 16" width="40" height="34" shape-rendering="crispEdges">
-            <rect x="7" y="0" width="2" height="3"/>
-            <rect x="7" y="13" width="2" height="3"/>
-            <rect x="0" y="7" width="3" height="2"/>
-            <rect x="13" y="7" width="3" height="2"/>
-            <rect x="2" y="2" width="2" height="2"/>
-            <rect x="12" y="2" width="2" height="2"/>
-            <rect x="2" y="12" width="2" height="2"/>
-            <rect x="12" y="12" width="2" height="2"/>
-            <rect x="4" y="4" width="8" height="2"/>
-            <rect x="4" y="10" width="8" height="2"/>
-            <rect x="4" y="4" width="2" height="8"/>
-            <rect x="10" y="4" width="2" height="8"/>
-            <rect x="6" y="6" width="4" height="4"/>
-          </svg>
-        </span>
-        <span>SETTINGS</span>
-      </button>
-    </nav>
-    <section
-      id="debug-panel"
-      class="debug-panel"
-      role="dialog"
-      aria-modal="false"
-      aria-labelledby="debug-title"
-      aria-hidden="true"
-    >
-      <h2 id="debug-title" class="debug-title">DEBUG LOG</h2>
-      <pre id="session-log" tabindex="0"></pre>
-      <div class="debug-actions">
-        <button id="debug-refresh" type="button">Refresh rates</button>
-        <button id="clear-cache" type="button">Clear cache</button>
-        <button id="copy-diagnostics" type="button">Copy diagnostics</button>
-        <button id="install-app" type="button" hidden>Install app</button>
+    <header class="topbar">
+      <div class="brand">
+        <img class="brand-mark" src="/sprites/btc-chart.png" alt="" width="32" height="32">
+        <h1 class="wordmark" aria-label="Deez Currency Calculator"><span class="wordmark-main">DEEZ</span><span class="wordmark-sub">CURRENCY CALC</span></h1>
       </div>
-      <div id="debug-content" class="debug-meta sr-only" aria-hidden="true"></div>
+      <div class="topbar-actions">
+        ${tipsAllowed ? `<button id="tip-open" class="icon-btn" type="button" aria-label="Tip jar" aria-haspopup="dialog">${heartIcon}</button>` : ""}
+        <button id="design-open" class="icon-btn" type="button" aria-label="Settings" aria-haspopup="dialog" aria-controls="design-dialog">${gearIcon}</button>
+      </div>
+    </header>
+    <section class="converter" aria-labelledby="converter-title">
+      <h2 id="converter-title" class="sr-only">Currency calculator</h2>
+      <div class="panel">
+        ${leg("top", "amount", "from-trigger", prefs.from, prefs.amount)}
+        <div class="divider">
+          <button id="swap" class="swap" type="button" aria-label="Flip direction" title="Flip direction: type the other amount">${flipIcon}</button>
+        </div>
+        ${leg("bottom", "result", "to-trigger", prefs.to, prefs.result)}
+      </div>
+      <button id="rate-status" class="status" type="button" data-kind="loading">
+        <span class="status-top">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="status-label" class="status-label">LOADING</span>
+          <span id="status-when" class="status-when"></span>
+        </span>
+        <span id="status-rate" class="status-rate"></span>
+        <span id="status-inverse" class="status-rate status-inverse"></span>
+        <span id="status-hint" class="status-hint"></span>
+      </button>
+      <p id="main-error" class="sr-only" role="alert"></p>
+      <p id="announce" class="sr-only" role="status" aria-live="polite"></p>
     </section>
   </main>
   ${
     tipsAllowed
-      ? `<dialog id="tip-dialog" class="tip-dialog" aria-labelledby="tip-title">
-    <button class="close tip-close" type="button" aria-label="Close tip screen">×</button>
-    <div class="tip-body">
-      <h2 id="tip-title"><span>TIP IF</span><span>YOU'RE</span><span>COOL</span></h2>
-      <img class="tip-check" src="/sprites/tip-check.png" alt="" width="72" height="72">
+      ? `<dialog id="tip-dialog" class="sheet tip-dialog" aria-labelledby="tip-title">
+    ${sheetHead("tip-title-bar", "TIP JAR", "Close tip screen")}
+    <div class="sheet-body tip-body">
+      <h2 id="tip-title" class="tip-title"><span>TIP IF</span> <span>YOU'RE</span> <span>COOL</span></h2>
       <div class="tip-qr-well">${tipCards}</div>
     </div>
   </dialog>`
       : ""
   }
-  <dialog id="currency-picker" class="currency-picker" aria-labelledby="currency-picker-title">
-    <button class="close currency-picker-close" type="button" aria-label="Close currency list">×</button>
-    <div class="currency-picker-body">
-      <h2 id="currency-picker-title" class="currency-picker-title">Choose currency</h2>
-      <div id="currency-picker-list" class="currency-picker-list">${currencyPickerListMarkup}</div>
+  <dialog id="currency-picker" class="sheet currency-picker" aria-labelledby="currency-picker-title">
+    ${sheetHead("currency-picker-title", "FROM CURRENCY", "Close currency list")}
+    <div class="sheet-search">
+      <div class="well search-well">
+        <input id="currency-search" type="search" placeholder="SEARCH" aria-label="Search currencies" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search">
+      </div>
+    </div>
+    <div id="currency-picker-list" class="sheet-body currency-picker-list">
+      ${currencyPickerListMarkup}
+      <p id="currency-empty" class="empty" hidden>NO MATCH</p>
     </div>
   </dialog>
-  <dialog id="design-dialog" class="design-dialog" aria-labelledby="design-title">
-    <button class="close design-close" type="button" aria-label="Close design settings">×</button>
-    <div class="design-body">
-      <h2 id="design-title" class="design-title">DESIGN</h2>
-      <p class="design-hint">Pick a look, or open a section to tweak colors, type, and spacing.</p>
-      <div class="design-presets" role="group" aria-label="Design presets">${presetMarkup}</div>
-      <button id="design-reset" class="design-reset" type="button">Reset to default</button>
-      <details class="design-section">
-        <summary>Colors</summary>
-        <div class="design-fields">${colorFieldMarkup}</div>
-      </details>
-      <details class="design-section">
-        <summary>Type</summary>
-        <div class="design-fields">
-          <div class="design-field">
-            <label for="design-ui-scale">Size <span id="design-ui-scale-value" class="design-range-value">${Math.round(designTheme.uiScale * 100)}%</span></label>
-            <input id="design-ui-scale" type="range" min="0.75" max="1.4" step="0.05" value="${designTheme.uiScale}">
-          </div>
-          <div class="design-toggle-row">
-            <span id="design-pixel-label">Pixel font</span>
-            <button id="design-pixel-font" class="design-toggle" type="button" role="switch" aria-checked="${designTheme.font === "pixel"}" aria-labelledby="design-pixel-label"></button>
-          </div>
+  <dialog id="design-dialog" class="sheet design-dialog" aria-labelledby="design-title">
+    ${sheetHead("design-title", "SETTINGS", "Close settings")}
+    <div class="sheet-body">
+      <section class="group" aria-labelledby="look-label">
+        <h3 id="look-label" class="group-label">LOOK</h3>
+        <div class="looks" role="radiogroup" aria-labelledby="look-label">${lookMarkup}</div>
+      </section>
+      <section class="group" aria-labelledby="rates-label">
+        <h3 id="rates-label" class="group-label">RATES</h3>
+        <div class="list">
+          <button id="settings-refresh" class="list-row" type="button">
+            <span class="row-title">REFRESH NOW</span><span id="settings-updated" class="row-value"></span>
+          </button>
+          <div class="list-row is-static"><span class="row-title">SOURCE</span><span class="row-value">COINBASE</span></div>
         </div>
-      </details>
-      <details class="design-section">
-        <summary>Shape</summary>
-        <div class="design-fields">
-          <div class="design-field">
-            <label for="design-radius">Corners <span id="design-radius-value" class="design-range-value">${designTheme.radius}px</span></label>
-            <input id="design-radius" type="range" min="0" max="24" step="1" value="${designTheme.radius}">
-          </div>
+      </section>
+      <section class="group" aria-labelledby="about-label">
+        <h3 id="about-label" class="group-label">ABOUT</h3>
+        <div class="list">
+          <div class="list-row is-static"><span class="row-title">VERSION</span><span class="row-value">${__APP_VERSION__}</span></div>
+          <button id="debug-open" class="list-row" type="button" aria-haspopup="dialog" aria-controls="debug-panel">
+            <span class="row-title">DIAGNOSTICS</span>${rightIcon}
+          </button>
         </div>
-      </details>
-      <details class="design-section">
-        <summary>Density</summary>
-        <div class="design-fields">
-          <div class="design-field">
-            <label for="design-space">Spacing <span id="design-space-value" class="design-range-value">${Math.round(designTheme.space * 100)}%</span></label>
-            <input id="design-space" type="range" min="0.6" max="1.4" step="0.05" value="${designTheme.space}">
-          </div>
-          <div class="design-field">
-            <label for="design-control-height">Control height <span id="design-control-height-value" class="design-range-value">${designTheme.controlHeight}px</span></label>
-            <input id="design-control-height" type="range" min="40" max="64" step="2" value="${designTheme.controlHeight}">
-          </div>
-        </div>
-      </details>
+      </section>
     </div>
   </dialog>
-  <aside id="update-toast" hidden>A new version is available. <button id="update-app" type="button">Update</button></aside>`;
+  <dialog id="debug-panel" class="sheet debug-panel" aria-labelledby="debug-title">
+    ${sheetHead("debug-title", "DIAGNOSTICS", "Close diagnostics")}
+    <div class="sheet-body">
+      <div id="debug-content" class="debug-meta"></div>
+      <h3 class="group-label">SESSION LOG</h3>
+      <pre id="session-log" tabindex="0"></pre>
+      <div class="debug-actions">
+        <button id="debug-refresh" class="btn" type="button">REFRESH RATES</button>
+        <button id="clear-cache" class="btn" type="button">CLEAR CACHE</button>
+        <button id="copy-diagnostics" class="btn" type="button">COPY REPORT</button>
+        <button id="install-app" class="btn" type="button" hidden>INSTALL APP</button>
+      </div>
+    </div>
+  </dialog>
+  <aside id="update-toast" hidden>NEW VERSION READY <button id="update-app" class="btn" type="button">UPDATE</button></aside>`;
+
+/* ---------- elements ---------- */
+
+function byId<T extends HTMLElement>(id: string) {
+  return document.getElementById(id) as T;
+}
 
 const amount = byId<HTMLInputElement>("amount");
 const result = byId<HTMLInputElement>("result");
+const fromTrigger = byId<HTMLButtonElement>("from-trigger");
+const toTrigger = byId<HTMLButtonElement>("to-trigger");
+const swapButton = byId<HTMLButtonElement>("swap");
+const statusButton = byId<HTMLButtonElement>("rate-status");
+const currencyPicker = byId<HTMLDialogElement>("currency-picker");
+const currencyPickerTitle = byId("currency-picker-title");
+const currencySearch = byId<HTMLInputElement>("currency-search");
+const debugPanel = byId<HTMLDialogElement>("debug-panel");
+const tipDialog = tipsAllowed ? byId<HTMLDialogElement>("tip-dialog") : null;
+const designDialog = byId<HTMLDialogElement>("design-dialog");
+const designOpen = byId<HTMLButtonElement>("design-open");
 
 /** Select all on focus so a tap is ready to replace. */
 function selectAllOnFocus(input: HTMLInputElement) {
@@ -333,30 +335,15 @@ function selectAllOnFocus(input: HTMLInputElement) {
   // Desktop browsers clear selection on mouseup after focus; keep it.
   input.addEventListener("mouseup", (event) => event.preventDefault());
 }
-
 selectAllOnFocus(amount);
 selectAllOnFocus(result);
-const fromTrigger = byId<HTMLButtonElement>("from-trigger");
-const toTrigger = byId<HTMLButtonElement>("to-trigger");
-const currencyPicker = byId<HTMLDialogElement>("currency-picker");
-const currencyPickerTitle = byId("currency-picker-title");
-const debugPanel = byId("debug-panel");
-const debugButton = byId<HTMLButtonElement>("debug-open");
-const tipDialog = tipsAllowed
-  ? byId<HTMLDialogElement>("tip-dialog")
-  : null;
-const designDialog = byId<HTMLDialogElement>("design-dialog");
-const designOpen = byId<HTMLButtonElement>("design-open");
-const pixelFontToggle = byId<HTMLButtonElement>("design-pixel-font");
 
-function byId<T extends HTMLElement>(id: string) {
-  return document.getElementById(id) as T;
-}
 function log(message: string) {
   logs.push(`[${new Date().toLocaleTimeString()}] ${message}`);
   if (logs.length > 100) logs.shift();
   renderDebug();
 }
+
 function save() {
   savePreferences({
     amount: amount.value,
@@ -369,83 +356,47 @@ function save() {
   });
 }
 
+/* ---------- converter ---------- */
+
 function syncCurrencyTriggers() {
   const fromCurrency = getCurrency(fromCode);
   const toCurrency = getCurrency(toCode);
   fromTrigger.querySelector(".currency-trigger-code")!.textContent = fromCode;
   toTrigger.querySelector(".currency-trigger-code")!.textContent = toCode;
+  byId("amount-name").textContent = upper(fromCurrency?.name ?? fromCode);
+  byId("result-name").textContent = upper(toCurrency?.name ?? toCode);
   fromTrigger.setAttribute(
     "aria-label",
-    `From currency ${fromCode}${fromCurrency ? ` ${fromCurrency.name}` : ""}`,
+    `From currency: ${fromCode}${fromCurrency ? ` ${fromCurrency.name}` : ""}. Change`,
   );
   toTrigger.setAttribute(
     "aria-label",
-    `To currency ${toCode}${toCurrency ? ` ${toCurrency.name}` : ""}`,
+    `To currency: ${toCode}${toCurrency ? ` ${toCurrency.name}` : ""}. Change`,
   );
+  amount.setAttribute("aria-label", `Amount in ${fromCurrency?.name ?? fromCode}`);
+  result.setAttribute("aria-label", `Amount in ${toCurrency?.name ?? toCode}`);
 }
 
-function paintCurrencyPickerSelection() {
-  const selected = currencyPickerTarget === "from" ? fromCode : toCode;
-  currencyPicker
-    .querySelectorAll<HTMLButtonElement>(".currency-option")
-    .forEach((btn) => {
-      const active = btn.dataset.code === selected;
-      btn.setAttribute("aria-current", String(active));
-      btn.classList.toggle("is-selected", active);
-    });
-}
-
-function openCurrencyPicker(target: "from" | "to") {
-  currencyPickerTarget = target;
-  currencyPickerTitle.textContent =
-    target === "from" ? "From currency" : "To currency";
-  paintCurrencyPickerSelection();
-  setDebugOpen(false);
-  currencyPicker.showModal();
-  const selected = currencyPicker.querySelector<HTMLButtonElement>(
-    ".currency-option.is-selected",
-  );
-  (selected ?? currencyPicker.querySelector<HTMLElement>(".close"))?.focus();
-}
-
-function closeCurrencyPicker() {
-  if (!currencyPicker.open) return;
-  currencyPicker.close();
-  currencyPickerTarget = null;
-}
-
-function applyCurrencyPick(code: string) {
-  if (!currencyPickerTarget || !getCurrency(code)) return;
-  if (currencyPickerTarget === "from") {
-    if (code === fromCode) {
-      closeCurrencyPicker();
-      return;
-    }
-    fromCode = code;
-    syncCurrencyTriggers();
-    closeCurrencyPicker();
-    table = null;
-    save();
-    void loadRates();
-    return;
+/** Typed field = bright; computed field = accent with ≈. Long numbers step down a size. */
+function paintFields() {
+  const top = app.querySelector<HTMLElement>('[data-leg="top"]')!;
+  const bottom = app.querySelector<HTMLElement>('[data-leg="bottom"]')!;
+  top.classList.toggle("is-driven", source === "bottom");
+  bottom.classList.toggle("is-driven", source === "top");
+  for (const input of [amount, result]) {
+    input.classList.toggle("is-long", input.value.length > 11);
   }
-  if (code === toCode) {
-    closeCurrencyPicker();
-    return;
-  }
-  toCode = code;
-  syncCurrencyTriggers();
-  closeCurrencyPicker();
-  renderConversion();
-  if (!table?.rates[toCode]) void loadRates(true);
 }
 
-function setDebugOpen(open: boolean) {
-  debugOpen = open;
-  debugPanel.classList.toggle("is-open", open);
-  debugPanel.setAttribute("aria-hidden", String(!open));
-  debugButton.setAttribute("aria-pressed", String(open));
-  if (open) renderDebug();
+let announceTimer = 0;
+function announce() {
+  window.clearTimeout(announceTimer);
+  announceTimer = window.setTimeout(() => {
+    if (!amount.value || !result.value) return;
+    const from = getCurrency(fromCode)?.name ?? fromCode;
+    const to = getCurrency(toCode)?.name ?? toCode;
+    byId("announce").textContent = `${amount.value} ${from} is ${result.value} ${to}`;
+  }, 700);
 }
 
 function renderConversion() {
@@ -461,32 +412,125 @@ function renderConversion() {
 
   drivenError.textContent = "";
   sourceError.textContent =
-    sourceInput.value && !parsed.valid ? parsed.reason : "";
+    sourceInput.value && !parsed.valid ? shortReason(parsed.reason) : "";
+  sourceInput.closest(".well")!.classList.toggle(
+    "is-invalid",
+    Boolean(sourceInput.value && !parsed.valid),
+  );
+  drivenInput.closest(".well")!.classList.remove("is-invalid");
 
   if (!sourceInput.value) {
     drivenInput.value = "";
   } else if (parsed.valid && rate && drivenCurrency) {
-    if (source === "top") {
-      const mid = calculate(parsed.normalized, rate)!;
-      drivenInput.value = formatResult(mid, drivenCurrency);
-    } else {
-      const mid = calculateInverse(parsed.normalized, rate)!;
-      drivenInput.value = formatResult(mid, drivenCurrency);
-    }
-  } else if (!rate && parsed.valid) {
-    drivenInput.value = "";
-    drivenError.textContent = "Unavailable";
+    const mid =
+      source === "top"
+        ? calculate(parsed.normalized, rate)!
+        : calculateInverse(parsed.normalized, rate)!;
+    drivenInput.value = formatResult(mid, drivenCurrency);
+  } else if (!parsed.valid) {
+    // keep the last good value visible but dimmed while the input is fixed
   } else {
     drivenInput.value = "";
   }
+  drivenInput.closest(".well")!.classList.toggle(
+    "is-dim",
+    Boolean(sourceInput.value && !parsed.valid),
+  );
 
+  paintFields();
   renderStatus();
+  announce();
   save();
 }
 
-function renderStatus() {
-  byId("main-error").textContent = status === "error" ? lastError : "";
+function shortReason(reason: string) {
+  if (/18 significant/.test(reason)) return "TOO LONG";
+  return "NUMBERS ONLY";
 }
+
+/** Strip anything that can't be part of a number as it's typed. */
+function sanitize(input: HTMLInputElement) {
+  const cleaned = input.value.replace(/[^\d.,\s]/g, "");
+  if (cleaned !== input.value) input.value = cleaned;
+}
+
+/* ---------- status line ---------- */
+
+function whenLabel(ts: number) {
+  const d = new Date(ts);
+  const sameDay = d.toDateString() === new Date().toDateString();
+  const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return sameDay
+    ? time
+    : `${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })} ${time}`;
+}
+
+function renderStatus() {
+  const pairRate = table?.rates[toCode] ?? null;
+  const refreshing = status === "loading" || status === "refreshing";
+  const line = describeStatus(table, Date.now(), {
+    online: navigator.onLine,
+    pairRate,
+    fromCode,
+    toCode,
+    feePercent: "",
+    fetchError: status === "error" ? lastError : null,
+    refreshing,
+  });
+  let kind: string = line.kind;
+  let label = "";
+  let hint = "";
+  const when = table ? whenLabel(table.fetchedAt) : "";
+  if (table && !pairRate && !refreshing) kind = "error";
+  switch (kind) {
+    case "loading":
+      label = "LOADING";
+      hint = "FETCHING RATES";
+      break;
+    case "refreshing":
+      label = "UPDATING";
+      hint = "FETCHING LATEST RATES";
+      break;
+    case "fresh":
+      label = "LIVE";
+      hint = "TAP TO REFRESH";
+      break;
+    case "stale":
+      label = "CACHED";
+      hint = "TAP TO REFRESH";
+      break;
+    case "offline":
+      label = "OFFLINE";
+      hint = table ? "SHOWING SAVED RATES · TAP TO RETRY" : "NO SAVED RATES · TAP TO RETRY";
+      break;
+    default:
+      label = "NO RATES";
+      hint =
+        table && !pairRate
+          ? `NO RATE FOR ${fromCode} → ${toCode} · TAP TO RETRY`
+          : "CAN'T REACH COINBASE · TAP TO RETRY";
+  }
+  statusButton.dataset.kind = kind;
+  byId("status-label").textContent = label;
+  byId("status-when").textContent = when && kind !== "error" ? when : "";
+  byId("status-rate").textContent =
+    pairRate && kind !== "error" ? `1 ${fromCode} = ${formatRate(pairRate)} ${toCode}` : "";
+  const inverse = pairRate ? calculateInverse("1", pairRate) : null;
+  byId("status-inverse").textContent =
+    inverse && kind !== "error" ? `1 ${toCode} = ${formatRate(inverse)} ${fromCode}` : "";
+  byId("status-hint").textContent = hint;
+  statusButton.setAttribute(
+    "aria-label",
+    [label, byId("status-rate").textContent, when ? `updated ${when}` : "", hint]
+      .filter(Boolean)
+      .join(". "),
+  );
+  statusButton.setAttribute("aria-busy", String(refreshing));
+  byId("main-error").textContent = kind === "error" ? hint.replace(" · TAP TO RETRY", "") : "";
+  byId("settings-updated").textContent = when ? `UPDATED ${when}` : "";
+}
+
+/* ---------- rates ---------- */
 
 async function loadRates(force = false) {
   abortController?.abort();
@@ -516,9 +560,7 @@ async function loadRates(force = false) {
     const loaded = await provider.getRates(fromCode, own.signal);
     if (own.signal.aborted || loaded.base !== fromCode) return;
     if (!loaded.rates[toCode])
-      throw new Error(
-        `No current rate is available for ${fromCode} → ${toCode}.`,
-      );
+      throw new Error(`No current rate is available for ${fromCode} → ${toCode}.`);
     table = loaded;
     requestDuration = Math.round(performance.now() - started);
     await setCachedRates(loaded);
@@ -528,10 +570,8 @@ async function loadRates(force = false) {
   } catch (error) {
     if (own.signal.aborted) return;
     lastError =
-      error instanceof Error
-        ? error.message
-        : "Rates are temporarily unavailable.";
-    if (table) status = "stale";
+      error instanceof Error ? error.message : "Rates are temporarily unavailable.";
+    if (table) status = navigator.onLine ? "stale" : "offline";
     else status = navigator.onLine ? "error" : "offline";
     log(lastError);
   }
@@ -539,36 +579,110 @@ async function loadRates(force = false) {
   renderDebug();
 }
 
+/* ---------- currency picker ---------- */
+
+function paintCurrencyPickerSelection() {
+  const selected = currencyPickerTarget === "from" ? fromCode : toCode;
+  const other = currencyPickerTarget === "from" ? toCode : fromCode;
+  currencyPicker.querySelectorAll<HTMLButtonElement>(".currency-option").forEach((btn) => {
+    const active = btn.dataset.code === selected;
+    btn.setAttribute("aria-current", String(active));
+    btn.classList.toggle("is-selected", active);
+    btn.classList.toggle("is-other", btn.dataset.code === other);
+  });
+}
+
+function filterCurrencies() {
+  const q = currencySearch.value.trim().toLowerCase();
+  let shown = 0;
+  currencyPicker.querySelectorAll<HTMLElement>(".currency-group").forEach((group) => {
+    let groupShown = 0;
+    group.querySelectorAll<HTMLButtonElement>(".currency-option").forEach((btn) => {
+      const match = !q || (btn.dataset.search ?? "").includes(q);
+      btn.hidden = !match;
+      if (match) groupShown += 1;
+    });
+    group.hidden = groupShown === 0;
+    shown += groupShown;
+  });
+  byId("currency-empty").hidden = shown > 0;
+}
+
+function openCurrencyPicker(target: "from" | "to") {
+  currencyPickerTarget = target;
+  currencyPickerTitle.textContent = target === "from" ? "FROM CURRENCY" : "TO CURRENCY";
+  currencySearch.value = "";
+  filterCurrencies();
+  paintCurrencyPickerSelection();
+  currencyPicker.showModal();
+  const selected = currencyPicker.querySelector<HTMLButtonElement>(".currency-option.is-selected");
+  selected?.scrollIntoView({ block: "center" });
+  (selected ?? currencyPicker.querySelector<HTMLElement>(".close"))?.focus({ preventScroll: true });
+}
+
+function closeCurrencyPicker() {
+  if (!currencyPicker.open) return;
+  currencyPicker.close();
+  currencyPickerTarget = null;
+}
+
+function applyCurrencyPick(code: string) {
+  if (!currencyPickerTarget || !getCurrency(code)) return;
+  const target = currencyPickerTarget;
+  const current = target === "from" ? fromCode : toCode;
+  const other = target === "from" ? toCode : fromCode;
+  closeCurrencyPicker();
+  if (code === current) return;
+  if (code === other) {
+    // Picking the other side's currency swaps the pair.
+    [fromCode, toCode] = [toCode, fromCode];
+  } else if (target === "from") {
+    fromCode = code;
+  } else {
+    toCode = code;
+    syncCurrencyTriggers();
+    renderConversion();
+    if (!table?.rates[toCode]) void loadRates(true);
+    return;
+  }
+  syncCurrencyTriggers();
+  table = null;
+  renderConversion();
+  void loadRates();
+}
+
+/* ---------- events: converter ---------- */
+
 amount.addEventListener("input", () => {
+  sanitize(amount);
   source = "top";
   renderConversion();
 });
 result.addEventListener("input", () => {
+  sanitize(result);
   source = "bottom";
   renderConversion();
 });
+for (const input of [amount, result]) {
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") input.blur();
+  });
+}
+// Tap anywhere outside a field to put the keyboard away.
+document.addEventListener("pointerdown", (event) => {
+  const active = document.activeElement;
+  if (
+    (active === amount || active === result) &&
+    !(event.target as HTMLElement).closest(".well")
+  ) {
+    (active as HTMLInputElement).blur();
+  }
+});
+
 fromTrigger.addEventListener("click", () => openCurrencyPicker("from"));
 toTrigger.addEventListener("click", () => openCurrencyPicker("to"));
-currencyPicker.querySelector<HTMLButtonElement>(".close")?.addEventListener(
-  "click",
-  () => closeCurrencyPicker(),
-);
-currencyPicker.addEventListener("click", (event) => {
-  if (event.target === currencyPicker) closeCurrencyPicker();
-});
-currencyPicker.addEventListener("cancel", (event) => {
-  event.preventDefault();
-  closeCurrencyPicker();
-});
-byId("currency-picker-list").addEventListener("click", (event) => {
-  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(
-    ".currency-option",
-  );
-  if (!btn?.dataset.code) return;
-  applyCurrencyPick(btn.dataset.code);
-});
-byId("swap").addEventListener("click", () => {
-  // Invert direction — currencies stay put and the typed amount carries over.
+swapButton.addEventListener("click", () => {
+  // Flip direction — currencies stay put and the typed amount carries over.
   // 1 FROM = X TO  →  Y FROM = 1 TO;  100 FROM = X TO  →  Y FROM = 100 TO.
   const sourceInput = source === "top" ? amount : result;
   const typed = sourceInput.value.trim();
@@ -580,82 +694,51 @@ byId("swap").addEventListener("click", () => {
     amount.value = carried;
     source = "top";
   }
+  swapButton.classList.remove("is-flipping");
+  void swapButton.offsetWidth;
+  swapButton.classList.add("is-flipping");
   renderConversion();
 });
+swapButton.addEventListener("animationend", () => swapButton.classList.remove("is-flipping"));
+statusButton.addEventListener("click", () => void loadRates(true));
 
-debugButton.addEventListener("click", () => setDebugOpen(!debugOpen));
-document.addEventListener("keydown", (event) => {
-  if (
-    event.key === "Escape" &&
-    debugOpen &&
-    !tipDialog?.open &&
-    !designDialog.open &&
-    !currencyPicker.open
-  ) {
-    setDebugOpen(false);
-  }
-});
-let tipClosing = false;
+/* ---------- events: dialogs ---------- */
 
-function focusTipClose() {
-  if (!tipDialog) return;
-  const closeBtn = tipDialog.querySelector<HTMLElement>(".close");
-  if (!closeBtn) return;
-  try {
-    closeBtn.focus({
-      preventScroll: true,
-      focusVisible: false,
-    } as FocusOptions);
-  } catch {
-    closeBtn.focus({ preventScroll: true });
-  }
+function wireSheet(dialog: HTMLDialogElement, onClose: () => void = () => dialog.close()) {
+  dialog.querySelector<HTMLButtonElement>(".sheet-head .close")?.addEventListener("click", onClose);
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) onClose();
+  });
+  dialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    onClose();
+  });
 }
 
-function openTipDialog() {
-  if (!tipDialog) return;
-  tipClosing = false;
-  tipDialog.classList.remove("is-closing");
-  tipDialog.showModal();
-  focusTipClose();
-}
-
-function closeTipDialog() {
-  if (!tipDialog || !tipDialog.open || tipClosing) return;
-  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)")
-    .matches;
-  if (reduceMotion) {
-    tipDialog.classList.remove("is-closing");
-    tipDialog.close();
+wireSheet(currencyPicker, closeCurrencyPicker);
+currencySearch.addEventListener("input", filterCurrencies);
+currencySearch.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    // search inputs swallow Escape to clear themselves; close the sheet instead
+    event.preventDefault();
+    closeCurrencyPicker();
     return;
   }
-  tipClosing = true;
-  tipDialog.classList.add("is-closing");
-  let finished = false;
-  const finish = () => {
-    if (finished || !tipDialog) return;
-    finished = true;
-    tipDialog.close();
-    tipDialog.classList.remove("is-closing");
-    tipClosing = false;
-  };
-  tipDialog.addEventListener("animationend", (event) => {
-    if (event.target === tipDialog) finish();
-  }, { once: true });
-  window.setTimeout(finish, 280);
-}
+  if (event.key !== "Enter") return;
+  const first = currencyPicker.querySelector<HTMLButtonElement>(".currency-option:not([hidden])");
+  if (first?.dataset.code) applyCurrencyPick(first.dataset.code);
+});
+byId("currency-picker-list").addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".currency-option");
+  if (!btn?.dataset.code) return;
+  applyCurrencyPick(btn.dataset.code);
+});
 
-if (tipsAllowed && tipDialog) {
-  byId("tip-open").addEventListener("click", () => openTipDialog());
-  tipDialog.querySelector<HTMLButtonElement>(".close")?.addEventListener(
-    "click",
-    () => closeTipDialog(),
-  );
-  tipDialog.addEventListener("click", (event) => {
-    if (event.target === tipDialog) closeTipDialog();
-  });
-  tipDialog.addEventListener("cancel", (event) => {
-    event.preventDefault();
-    closeTipDialog();
+if (tipDialog) {
+  wireSheet(tipDialog);
+  byId("tip-open").addEventListener("click", () => {
+    tipDialog.showModal();
+    tipDialog.querySelector<HTMLElement>(".close")?.focus({ preventScroll: true });
   });
 }
 
@@ -667,114 +750,40 @@ function commitTheme(next: DesignTheme) {
 }
 
 function syncDesignControls() {
-  for (const { key, id } of colorFields) {
-    const color = designTheme[key];
-    const picker = byId<HTMLInputElement>(id);
-    const hex = byId<HTMLInputElement>(`${id}-hex`);
-    picker.value = color;
-    hex.value = color;
-  }
-  byId<HTMLInputElement>("design-ui-scale").value = String(designTheme.uiScale);
-  byId("design-ui-scale-value").textContent =
-    `${Math.round(designTheme.uiScale * 100)}%`;
-  byId<HTMLInputElement>("design-radius").value = String(designTheme.radius);
-  byId("design-radius-value").textContent = `${designTheme.radius}px`;
-  byId<HTMLInputElement>("design-space").value = String(designTheme.space);
-  byId("design-space-value").textContent =
-    `${Math.round(designTheme.space * 100)}%`;
-  byId<HTMLInputElement>("design-control-height").value = String(
-    designTheme.controlHeight,
-  );
-  byId("design-control-height-value").textContent =
-    `${designTheme.controlHeight}px`;
-  pixelFontToggle.setAttribute(
-    "aria-checked",
-    String(designTheme.font === "pixel"),
-  );
   designDialog.querySelectorAll<HTMLButtonElement>("[data-preset]").forEach((btn) => {
-    btn.setAttribute(
-      "aria-pressed",
-      String(btn.dataset.preset === designTheme.presetId),
-    );
+    btn.setAttribute("aria-checked", String(btn.dataset.preset === designTheme.presetId));
   });
 }
 
+wireSheet(designDialog);
 designOpen.addEventListener("click", () => {
-  setDebugOpen(false);
   syncDesignControls();
+  renderStatus();
   designDialog.showModal();
-  designDialog.querySelector<HTMLElement>(".close")?.focus();
+  designDialog.querySelector<HTMLElement>(".close")?.focus({ preventScroll: true });
 });
-designDialog.querySelector<HTMLButtonElement>(".close")?.addEventListener(
-  "click",
-  () => designDialog.close(),
-);
-designDialog.addEventListener("click", (event) => {
-  if (event.target === designDialog) designDialog.close();
-});
-
 designDialog.querySelectorAll<HTMLButtonElement>("[data-preset]").forEach((btn) => {
   btn.addEventListener("click", () => {
-    const id = btn.dataset.preset;
-    if (!id || id === "custom") return;
-    commitTheme(
-      getPresetTheme(id as Exclude<DesignTheme["presetId"], "custom">),
-    );
+    const id = btn.dataset.preset as Exclude<DesignTheme["presetId"], "custom"> | undefined;
+    if (id) commitTheme(getPresetTheme(id));
   });
 });
+byId("settings-refresh").addEventListener("click", () => void loadRates(true));
 
-byId("design-reset").addEventListener("click", () => {
-  commitTheme({ ...DEFAULT_DESIGN_THEME });
+wireSheet(debugPanel);
+byId("debug-open").addEventListener("click", () => {
+  designDialog.close();
+  renderDebug();
+  debugPanel.showModal();
+  debugPanel.querySelector<HTMLElement>(".close")?.focus({ preventScroll: true });
 });
 
-for (const { key, id } of colorFields) {
-  byId<HTMLInputElement>(id).addEventListener("input", (event) => {
-    const value = (event.target as HTMLInputElement).value;
-    commitTheme({ ...designTheme, [key]: value, presetId: "custom" });
-  });
-  byId<HTMLInputElement>(`${id}-hex`).addEventListener("change", (event) => {
-    let value = (event.target as HTMLInputElement).value.trim();
-    if (!value.startsWith("#")) value = `#${value}`;
-    if (!/^#[0-9a-fA-F]{6}$/.test(value)) {
-      (event.target as HTMLInputElement).value = designTheme[key];
-      return;
-    }
-    commitTheme({
-      ...designTheme,
-      [key]: value.toLowerCase(),
-      presetId: "custom",
-    });
-  });
-}
-
-byId<HTMLInputElement>("design-ui-scale").addEventListener("input", (event) => {
-  const uiScale = Number((event.target as HTMLInputElement).value);
-  commitTheme({ ...designTheme, uiScale, presetId: "custom" });
-});
-byId<HTMLInputElement>("design-radius").addEventListener("input", (event) => {
-  const radius = Number((event.target as HTMLInputElement).value);
-  commitTheme({ ...designTheme, radius, presetId: "custom" });
-});
-byId<HTMLInputElement>("design-space").addEventListener("input", (event) => {
-  const space = Number((event.target as HTMLInputElement).value);
-  commitTheme({ ...designTheme, space, presetId: "custom" });
-});
-byId<HTMLInputElement>("design-control-height").addEventListener(
-  "input",
-  (event) => {
-    const controlHeight = Number((event.target as HTMLInputElement).value);
-    commitTheme({ ...designTheme, controlHeight, presetId: "custom" });
-  },
-);
-pixelFontToggle.addEventListener("click", () => {
-  const font = designTheme.font === "pixel" ? "system" : "pixel";
-  commitTheme({ ...designTheme, font, presetId: "custom" });
-});
+/* ---------- diagnostics ---------- */
 
 async function copyText(text: string) {
   try {
     await navigator.clipboard.writeText(text);
-    log("Copied text to clipboard");
+    log("Copied report to clipboard");
   } catch {
     lastError = "Clipboard access was denied.";
     log(lastError);
@@ -783,48 +792,38 @@ async function copyText(text: string) {
 
 function renderDebug() {
   const age = table
-    ? `${Math.floor((Date.now() - table.fetchedAt) / 1000)} seconds`
+    ? `${Math.floor((Date.now() - table.fetchedAt) / 1000)} s`
     : "Not available";
-  const rows = [
-    ["App version", "1.0.2"],
-    ["Shell", isTauri ? "Tauri desktop" : "Browser"],
+  const rows: [string, string][] = [
+    ["Version", __APP_VERSION__],
+    ["Shell", isTauri ? `Tauri ${tauriPlatform || "desktop"}` : "Browser"],
     ["Connection", navigator.onLine ? "Online" : "Offline"],
     ["Provider", table?.provider ?? "Coinbase"],
-    ["Current base", fromCode],
-    ["Valid rates", String(table ? Object.keys(table.rates).length : 0)],
-    [
-      "Last fetch",
-      table ? new Date(table.fetchedAt).toLocaleString() : "Never",
-    ],
+    ["Base", fromCode],
+    ["Rates", String(table ? Object.keys(table.rates).length : 0)],
+    ["Last fetch", table ? new Date(table.fetchedAt).toLocaleString() : "Never"],
     ["Cache age", age],
     ...(isTauri
       ? []
       : ([
+          ["Service worker", navigator.serviceWorker?.controller ? "Active" : "Not controlling"],
           [
-            "Service worker",
-            navigator.serviceWorker?.controller ? "Active" : "Not controlling",
-          ],
-          [
-            "PWA install",
+            "PWA",
             matchMedia("(display-mode: standalone)").matches
               ? "Installed"
               : deferredInstall
                 ? "Available"
-                : "Browser controlled",
+                : "Browser",
           ],
         ] as [string, string][])),
-    [
-      "Request duration",
-      requestDuration === null ? "Not available" : `${requestDuration} ms`,
-    ],
-    ["Latest error", lastError],
+    ["Request", requestDuration === null ? "Not available" : `${requestDuration} ms`],
+    ["Last error", lastError],
   ];
   const node = byId("debug-content");
   if (node)
     node.innerHTML = `<dl>${rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>`;
   const session = byId("session-log");
-  if (session)
-    session.textContent = logs.join("\n") || "No session events yet.";
+  if (session) session.textContent = logs.join("\n") || "No session events yet.";
 }
 byId("debug-refresh").addEventListener("click", () => void loadRates(true));
 byId("clear-cache").addEventListener("click", async () => {
@@ -835,6 +834,9 @@ byId("copy-diagnostics").addEventListener(
   "click",
   () => void copyText(`${byId("debug-content").innerText}\n${logs.join("\n")}`),
 );
+
+/* ---------- lifecycle ---------- */
+
 window.addEventListener("online", () => {
   log("Connection restored");
   void loadRates(true);
@@ -845,13 +847,14 @@ window.addEventListener("offline", () => {
   renderStatus();
 });
 document.addEventListener("visibilitychange", () => {
-  if (
-    document.visibilityState === "visible" &&
-    table &&
-    !isFresh(table.fetchedAt)
-  )
-    void loadRates();
+  if (document.visibilityState !== "visible") return;
+  if (table && !isFresh(table.fetchedAt)) void loadRates();
+  else renderStatus();
 });
+window.setInterval(() => {
+  if (table && status === "fresh" && !isFresh(table.fetchedAt)) status = "stale";
+  renderStatus();
+}, 60_000);
 
 if (!isTauri) {
   window.addEventListener("beforeinstallprompt", (event) => {
@@ -860,10 +863,7 @@ if (!isTauri) {
     byId("install-app").hidden = false;
     renderDebug();
   });
-  byId("install-app").addEventListener(
-    "click",
-    () => void deferredInstall?.prompt(),
-  );
+  byId("install-app").addEventListener("click", () => void deferredInstall?.prompt());
 
   const updateSW = registerSW({
     onNeedRefresh() {
@@ -882,5 +882,7 @@ if (!isTauri) {
 
 log("Application started");
 syncCurrencyTriggers();
+paintFields();
+renderStatus();
 renderDebug();
 void loadRates();
