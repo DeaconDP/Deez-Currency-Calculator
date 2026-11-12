@@ -415,6 +415,7 @@ button {
 .leg.is-driven .well.is-replacing input {
   color: var(--on-money);
   text-shadow: none;
+  caret-color: transparent; /* iOS draws selection handles in the caret colour */
 }
 
 .leg.is-driven .well input {
