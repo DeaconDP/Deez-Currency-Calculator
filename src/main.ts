@@ -667,6 +667,7 @@ function tally(
 // any touch, key or copy settles the number immediately
 document.addEventListener("pointerdown", finishTally, true);
 document.addEventListener("keydown", finishTally, true);
+document.addEventListener("focusin", finishTally, true); // e.g. a VoiceOver swipe onto the answer
 
 function shortReason(reason: string) {
   if (/18 significant/.test(reason)) return "MAX LENGTH";
@@ -849,7 +850,7 @@ function renderStatus() {
   statusButton.setAttribute("aria-busy", String(refreshing));
   const alertText = kind === "error" ? hint.replace(" · TAP TO RETRY", "") : "";
   if (byId("main-error").textContent !== alertText) byId("main-error").textContent = alertText;
-  byId("settings-updated").textContent = when;
+  byId("settings-updated").textContent = when ? `UPDATED ${when}` : "";
 }
 
 /** "1 ZAR = 0.0558 USD", or in sats when a bitcoin rate is tiny: "1 ZAR = 58 SATS". */

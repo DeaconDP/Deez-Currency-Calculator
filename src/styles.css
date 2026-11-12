@@ -1219,10 +1219,26 @@ button.list-row:active {
   margin-bottom: 8px;
 }
 
+/* Large Text: the caption gets its own line above the gold button */
+:root[data-text="large"] .divider {
+  flex-direction: column;
+  gap: 8px;
+  height: auto;
+}
+
+:root[data-text="large"] .divider::before {
+  top: auto;
+  bottom: 24px;
+}
+
 :root[data-text="large"] .swap-cap {
+  position: static;
+  max-width: none;
+  padding: 0;
+  transform: none;
+  background: none;
   font-size: 16px;
-  line-height: 20px;
-  white-space: normal;
+  line-height: 24px;
 }
 
 :root[data-text="large"] .copy-btn {
@@ -1274,14 +1290,15 @@ button.list-row:active {
 }
 
 .pairs-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 16px 8px;
   padding-bottom: 4px;
 }
 
 .pair-chip {
   display: inline-flex;
+  flex: 0 1 auto; /* tag-sized: an odd chip never stretches across the row */
   justify-content: center;
   align-items: center;
   gap: 8px;
