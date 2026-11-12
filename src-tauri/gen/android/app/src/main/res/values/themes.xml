@@ -1,6 +1,7 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Theme.deez_currency_calculator" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your theme here. -->
+        <!-- dark window behind the web view: no white flash at launch -->
+        <item name="android:windowBackground">#0b0b14</item>
     </style>
 </resources>
