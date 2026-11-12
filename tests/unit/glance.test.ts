@@ -56,7 +56,7 @@ describe("buildGlanceRows", () => {
         code: "EUR",
         ok: true,
         raw: "5",
-        display: "4.5",
+        display: "4.50",
       },
     ]);
   });
