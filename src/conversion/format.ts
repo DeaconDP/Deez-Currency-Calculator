@@ -18,7 +18,9 @@ export function formatResult(
         ? 6
         : abs < 1
           ? Math.max(4, currency.decimals)
-          : currency.decimals;
+          : abs >= 1_000_000
+            ? 0 // cents are noise at this size, and the number still fits
+            : currency.decimals;
   return new Intl.NumberFormat(undefined, {
     maximumFractionDigits,
     useGrouping: true,

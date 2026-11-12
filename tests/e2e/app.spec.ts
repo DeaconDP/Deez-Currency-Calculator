@@ -280,3 +280,31 @@ test("recent picks appear at the top of the picker; Enter picks the best match",
   await page.locator(".recent-chip", { hasText: "EUR" }).click();
   await expect(page.locator("#to-trigger")).toContainText("EUR");
 });
+
+test.describe("comma-decimal locale (en-ZA)", () => {
+  test.use({ locale: "en-ZA" });
+
+  test("reads 0,125 as a decimal, groups on blur, and copies what it shows", async ({
+    page,
+    context,
+  }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await mockCoinbase(page);
+    await page.goto("/");
+    const amount = page.locator("#amount");
+    await amount.fill("1250,5");
+    await expect(page.locator("#result")).toHaveValue("69,78");
+    await amount.blur();
+    await expect(amount).toHaveValue(/^1\s250,5$/);
+    await amount.focus();
+    await expect(amount).toHaveValue("1250,5");
+    await page.locator("#result-copy").click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("69,78");
+
+    await amount.fill("0,125");
+    await expect(page.locator("#result")).toHaveValue(/^0,00697/);
+    await amount.fill("1,5,5");
+    await expect(page.locator("#amount-error")).toHaveText("NUMBERS ONLY");
+    await expect(page.locator("#result")).toHaveValue("");
+  });
+});

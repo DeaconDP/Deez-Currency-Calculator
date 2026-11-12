@@ -202,13 +202,24 @@ button {
 
 /* The logo sprite is used as a mask so it takes each look's accent colour. */
 .brand-mark {
+  display: block;
   width: 32px;
   height: 32px;
   flex: none;
   background: var(--money);
   -webkit-mask: url("/sprites/btc-chart.png") center / 32px 32px no-repeat;
   mask: url("/sprites/btc-chart.png") center / 32px 32px no-repeat;
+}
+
+/* the mask would clip a shadow on the logo itself, so the wrapper casts it */
+.brand-mark-wrap {
+  display: block;
+  flex: none;
   filter: drop-shadow(2px 2px 0 var(--edge));
+}
+
+:root[data-look="high-contrast"] .brand-mark-wrap {
+  filter: none;
 }
 
 .wordmark {
@@ -388,9 +399,11 @@ button {
   opacity: 0.6;
 }
 
+/* classic inverted retro highlight */
 .well input::selection {
-  background: var(--control);
-  color: var(--money);
+  background: var(--money);
+  color: var(--on-money);
+  text-shadow: none;
 }
 
 .leg.is-driven .well input {
@@ -630,6 +643,7 @@ dialog.sheet::backdrop {
   line-height: 24px;
   font-weight: 400;
   color: var(--money);
+  text-shadow: 2px 2px 0 var(--edge);
 }
 
 .close {
@@ -703,7 +717,7 @@ dialog.sheet::backdrop {
 
 .currency-option {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr) auto 16px;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -768,6 +782,13 @@ dialog.sheet::backdrop {
 
 .currency-option.is-other .opt-tag {
   display: block;
+}
+
+.opt-tag,
+.currency-option .icon-check {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
 }
 
 .currency-option .icon-check {
@@ -1088,7 +1109,7 @@ button.list-row:active {
 }
 
 /* 1-bit contrast look: white edges mustn't double the wordmark */
-:root[data-look="high-contrast"] .wordmark-main {
+:root[data-look="high-contrast"] :is(.wordmark-main, .sheet-title) {
   text-shadow: none;
 }
 
@@ -1117,17 +1138,11 @@ button.list-row:active {
   white-space: normal;
 }
 
-:root[data-text="large"] .leg-name {
-  font-size: 8px;
-  line-height: 16px;
-}
-
 :root[data-text="large"] .copy-btn {
   height: 36px;
 }
 
 :root[data-text="large"] .currency-option {
-  grid-template-columns: 72px minmax(0, 1fr) 16px;
   padding: 12px 16px;
 }
 
@@ -1136,7 +1151,9 @@ button.list-row:active {
 }
 
 :root[data-text="large"] .opt-tag {
+  grid-row: 2;
   grid-column: 2;
   justify-self: start;
+  margin-top: 4px;
 }
 

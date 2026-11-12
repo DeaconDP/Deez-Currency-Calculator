@@ -62,6 +62,15 @@ let fromCode = prefs.from;
 let toCode = prefs.to;
 let currencyPickerTarget: "from" | "to" | null = null;
 
+/* ---------- locale numbers ---------- */
+
+const numberParts = new Intl.NumberFormat().formatToParts(1234.5);
+const decimalSeparator = (numberParts.find((p) => p.type === "decimal")?.value === "," ? "," : ".") as
+  | "."
+  | ",";
+/** Parse with the device locale's decimal point (the keypad shows the same one). */
+const parse = (value: string) => parseAmount(value, decimalSeparator);
+
 /* ---------- pixel icons (drawn on a grid, rendered with crisp edges) ---------- */
 
 function pixelIcon(
@@ -249,7 +258,7 @@ app.innerHTML = `
     }
     <header class="topbar">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-mark-wrap" aria-hidden="true"><span class="brand-mark"></span></span>
         <h1 class="wordmark" aria-label="Deez Currency Calculator"><span class="wordmark-main">DEEZ</span><span class="wordmark-sub">CURRENCY CALC</span></h1>
       </div>
       <div class="topbar-actions">
@@ -433,10 +442,12 @@ const nameOf = (code: string) => getCurrency(code)?.name ?? code;
 /** Fit the amount to its well: Press Start 2P is monospace, so 1 char = 1 em. */
 function fitInput(input: HTMLInputElement) {
   const chars = Math.max(input.value.length, 1);
-  const width = input.clientWidth;
-  if (!width) return;
-  // never below 16px: amounts stay readable and iOS won't zoom on focus
-  const size = chars * 24 <= width ? 24 : 16;
+  const width = input.clientWidth - 2;
+  if (width <= 0) return;
+  // While editing, never below 16px (readable, and iOS zooms inputs under 16px
+  // on focus). At rest a very long amount may drop to 8px rather than be cut off.
+  const editing = document.activeElement === input;
+  const size = chars * 24 <= width ? 24 : chars * 16 <= width || editing ? 16 : 8;
   input.dataset.size = String(size);
 }
 
@@ -506,11 +517,15 @@ function renderConversion() {
   const sourceError = byId(source === "top" ? "amount-error" : "result-error");
   const drivenError = byId(source === "top" ? "result-error" : "amount-error");
   const drivenCurrency = source === "top" ? toCurrency : fromCurrency;
-  const parsed = parseAmount(sourceInput.value);
+  const parsed = parse(sourceInput.value);
   const invalid = Boolean(sourceInput.value && !parsed.valid);
 
+  const previousError = sourceError.textContent;
   drivenError.textContent = "";
-  sourceError.textContent = invalid && !parsed.valid ? shortReason(parsed.reason) : "";
+  sourceError.textContent = !parsed.valid && invalid ? shortReason(parsed.reason) : "";
+  // VoiceOver doesn't re-read aria-describedby, so speak a new error once
+  if (sourceError.textContent && sourceError.textContent !== previousError)
+    say(sourceError.textContent === "TOO LONG" ? "Too long" : "Numbers only");
   sourceInput.closest(".well")!.classList.toggle("is-invalid", invalid);
   drivenInput.closest(".well")!.classList.remove("is-invalid");
 
@@ -539,10 +554,10 @@ function shortReason(reason: string) {
 
 /** Keep only what can be part of a number: ≤ 12 whole digits, ≤ 18 in all. */
 function sanitize(input: HTMLInputElement) {
-  const raw = input.value.replace(/[^\d.,\s\u00a0\u202f]/g, "");
-  // the last "." or "," followed by 1–2 or 4+ digits (or nothing) is the decimal point
-  const m = /^(.*?)([.,])(\d{0,2}|\d{4,})$/.exec(raw);
-  const whole = m ? m[1] : raw;
+  const raw = input.value.replace(/[^\d.,\s\u00a0\u202f'’]/g, "").replace(/^\s+/, "");
+  const cut = raw.lastIndexOf(decimalSeparator);
+  const whole = cut >= 0 ? raw.slice(0, cut) : raw;
+  const frac = cut >= 0 ? raw.slice(cut + 1) : "";
   let wholeDigits = 0;
   let cleanedWhole = "";
   for (const ch of whole) {
@@ -552,49 +567,44 @@ function sanitize(input: HTMLInputElement) {
     }
     cleanedWhole += ch;
   }
-  let cleaned = m ? `${cleanedWhole}${m[2]}${m[3].slice(0, Math.max(0, 18 - wholeDigits))}` : cleanedWhole;
-  if (cleaned === raw && raw === input.value) return;
-  if (!m && raw !== input.value) cleaned = cleanedWhole;
-  input.value = cleaned;
+  const cleanedFrac = frac.replace(/\D/g, "").slice(0, Math.max(0, 18 - wholeDigits));
+  const cleaned = cut >= 0 ? `${cleanedWhole}${decimalSeparator}${cleanedFrac}` : cleanedWhole;
+  if (cleaned !== input.value) input.value = cleaned;
 }
 
-// Typed amounts are reformatted on blur with the same locale formatter as the
-// computed side (1250.5 → 1,250.5 / 1 250,5 / 1.250,5), and stripped of
-// grouping on focus. In "." grouping locales a whole number stays ungrouped,
-// because "1.250" would be ambiguous when parsed back.
-const numberParts = new Intl.NumberFormat().formatToParts(1234.5);
-const groupSeparator = numberParts.find((p) => p.type === "group")?.value ?? ",";
-const decimalSeparator = numberParts.find((p) => p.type === "decimal")?.value ?? ".";
-const GROUP_CHARS = /[,\s\u00a0\u202f']/g;
-
+/** Show a parsed amount the locale's way: grouped, with its decimal point. */
+function formatTyped(normalized: string) {
+  const [int, frac] = normalized.split(".");
+  const grouped = new Intl.NumberFormat(undefined, { useGrouping: true }).format(BigInt(int));
+  return frac ? `${grouped}${decimalSeparator}${frac}` : grouped;
+}
+// Typed amounts are reformatted on blur with the same locale rules as the
+// computed side (1250.5 → 1,250.5 / 1 250,5 / 1.250,5) and shown plain while
+// editing (1250.5 / 1250,5). Both go through the locale-aware parser, so the
+// round trip never changes the number.
 function groupOnBlur(input: HTMLInputElement) {
-  const parsed = parseAmount(input.value);
+  const parsed = parse(input.value);
   if (!parsed.valid) return;
-  const [int, frac] = parsed.normalized.split(".");
-  const useGrouping = groupSeparator !== "." || Boolean(frac);
-  const grouped = new Intl.NumberFormat(undefined, { useGrouping }).format(BigInt(int));
-  input.value = frac ? `${grouped}${decimalSeparator}${frac}` : grouped;
+  input.value = formatTyped(parsed.normalized);
   fitInput(input);
 }
 function ungroupOnFocus(input: HTMLInputElement) {
-  let v = input.value;
-  if (groupSeparator === ".") {
-    // only strip "." groups when a "," decimal is present or there are several dots
-    if (v.includes(",") || (v.match(/\./g)?.length ?? 0) > 1) v = v.replace(/\./g, "");
-  } else if (groupSeparator === ",") {
-    v = v.replace(/,/g, "");
+  const parsed = parse(input.value);
+  if (!parsed.valid) return;
+  const plain = parsed.normalized.replace(".", decimalSeparator);
+  if (plain !== input.value) {
+    input.value = plain;
+    input.select(); // rewriting the value drops the tap-to-replace selection
   }
-  v = v.replace(/[\s\u00a0\u202f']/g, "");
-  if (v !== input.value) {
-    input.value = v;
-    fitInput(input);
-  }
+  fitInput(input);
 }
 
-/** What COPY puts on the clipboard: the value as shown, minus grouping. */
+/** What COPY puts on the clipboard: the value as shown, digits plus the decimal point. */
 function copyValue(display: string) {
-  if (groupSeparator === ".") return display.replace(/\.(?=\d{3}(\D|$))/g, "").replace(/\s/g, "");
-  return display.replace(GROUP_CHARS, "");
+  return display
+    .split(decimalSeparator)
+    .map((part) => part.replace(/\D/g, ""))
+    .join(decimalSeparator);
 }
 
 /* ---------- status line ---------- */
@@ -850,6 +860,7 @@ function applyCurrencyPick(code: string) {
   }
   syncCurrencyTriggers();
   table = null;
+  status = "loading"; // not "NO RATE" while the new base's rates load
   renderConversion();
   announce(`${nameOf(fromCode)} to ${nameOf(toCode)}`);
   void loadRates();
@@ -938,7 +949,7 @@ swapButton.addEventListener("click", () => {
   // 1 FROM = X TO  →  Y FROM = 1 TO;  100 FROM = X TO  →  Y FROM = 100 TO.
   const sourceInput = source === "top" ? amount : result;
   const typed = sourceInput.value.trim();
-  const carried = typed && parseAmount(typed).valid ? typed : "1";
+  const carried = typed && parse(typed).valid ? typed : "1";
   if (source === "top") {
     result.value = carried;
     source = "bottom";

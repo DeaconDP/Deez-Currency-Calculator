@@ -15,10 +15,45 @@ describe("amount parsing", () => {
   ])("parses %s", (input, expected) =>
     expect(parseAmount(input)).toEqual({ valid: true, normalized: expected }),
   );
-  it.each(["", "-2", "1e4", "NaN", "Infinity", "1234567890123456789"])(
+  it.each(["", "-2", "1e4", "NaN", "Infinity", "1234567890123456789", "1.5.5"])(
     "rejects %s",
     (input) => expect(parseAmount(input).valid).toBe(false),
   );
+  it("reads a leading separator as 0.", () =>
+    expect(parseAmount(".5")).toEqual({ valid: true, normalized: "0.5" }));
+  it("keeps a lone dot as the decimal point", () =>
+    expect(parseAmount("1.125")).toEqual({ valid: true, normalized: "1.125" }));
+
+  describe("with a comma-decimal locale (en-ZA, de-DE)", () => {
+    it.each([
+      ["0,125", "0.125"],
+      ["1,125", "1.125"],
+      ["1 250,5", "1250.5"],
+      ["12.500", "12500"],
+      ["1.234.567,89", "1234567.89"],
+      ["R 1 250,50".replace("R ", ""), "1250.50"],
+      ["1.5", "1.5"],
+    ])("parses %s", (input, expected) =>
+      expect(parseAmount(input, ",")).toEqual({ valid: true, normalized: expected }),
+    );
+    it.each(["1,5,5", "12.5000.1"])("rejects %s", (input) =>
+      expect(parseAmount(input, ",").valid).toBe(false),
+    );
+  });
+
+  describe("with a dot-decimal locale (en-US)", () => {
+    it.each([
+      ["1,250", "1250"],
+      ["0,125", "0.125"],
+      ["1,234,567.5", "1234567.5"],
+      ["0.125", "0.125"],
+    ])("parses %s", (input, expected) =>
+      expect(parseAmount(input, ".")).toEqual({ valid: true, normalized: expected }),
+    );
+    it.each(["1.5.", "1.5.5"])("rejects %s", (input) =>
+      expect(parseAmount(input, ".").valid).toBe(false),
+    );
+  });
 });
 describe("calculation and formatting", () => {
   it("uses exact decimal multiplication", () =>
