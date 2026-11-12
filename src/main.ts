@@ -1,4 +1,5 @@
 import "./styles.css";
+import Big from "big.js";
 import { registerSW } from "virtual:pwa-register";
 import { CoinbaseProvider } from "./api/coinbase";
 import { calculate, calculateInverse } from "./conversion/calculate";
@@ -150,6 +151,14 @@ const refreshIcon = pixelIcon(
   "icon-refresh",
 );
 
+const arrowIcon = pixelIcon(8, 16, [[0, 3, 5, 2], [5, 1, 1, 6], [6, 2, 1, 4], [7, 3, 1, 2]], "icon-arrow");
+const searchIcon = pixelIcon(
+  8,
+  16,
+  [[1, 0, 4, 1], [0, 1, 1, 4], [5, 1, 1, 4], [1, 5, 4, 1], [5, 5, 1, 1], [6, 6, 2, 2]],
+  "icon-search",
+);
+
 /** Extra words people search by: symbols, countries, nicknames. */
 const SEARCH_ALIASES: Record<string, string> = {
   ZAR: "r rand south africa sa",
@@ -189,7 +198,7 @@ const currencyPickerListMarkup = (["fiat", "crypto"] as const)
           `<button type="button" class="currency-option" data-code="${c.code}" data-search="${c.code.toLowerCase()} ${c.name.toLowerCase()} ${SEARCH_ALIASES[c.code] ?? ""}" aria-label="${c.code} ${c.name}">
             <span class="opt-code">${c.code}</span>
             <span class="opt-name">${upper(c.name)}</span>
-            <span class="opt-tag" aria-hidden="true">SWAP</span>
+            <span class="opt-tag" aria-hidden="true">TRADE PLACES</span>
             ${checkIcon}
           </button>`,
       )
@@ -215,6 +224,7 @@ const lookMarkup = LOOK_PRESETS.map(({ id, label }) => {
         <i style="background:${t.background}"></i><i style="background:${t.control}"></i><i style="background:${t.money}"></i>
       </span>
       <span class="look-name">${label}</span>
+      <span class="look-lcd" aria-hidden="true" style="background:${t.surface};color:${t.money};border-color:${t.control}">69.78</span>
     </button>`;
 }).join("");
 
@@ -226,13 +236,7 @@ const leg = (
   value: string,
 ) => `
   <div class="leg" data-leg="${which}">
-    <div class="leg-head">
-      <span class="leg-label" aria-hidden="true"><span class="leg-role" id="${inputId}-role"></span><span class="leg-name" id="${inputId}-name"></span></span>
-      <span class="leg-aside">
-        <span id="${inputId}-error" class="field-error"></span>
-        <button id="${inputId}-copy" class="copy-btn" type="button" hidden>COPY</button>
-      </span>
-    </div>
+    <span class="leg-label" aria-hidden="true"><span class="leg-role" id="${inputId}-role"></span><span class="leg-name" id="${inputId}-name"></span></span>
     <div class="leg-row">
       <div class="well">
         <input id="${inputId}" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" maxlength="28" placeholder="--" value="${value}" aria-describedby="${inputId}-error">
@@ -242,6 +246,12 @@ const leg = (
         ${chevronIcon}
       </button>
     </div>
+    <span class="leg-aside">
+      <span id="${inputId}-error" class="field-error"></span>
+      <button id="${inputId}-copy" class="copy-btn" type="button" hidden>COPY</button>
+      <button id="${inputId}-done" class="copy-btn done-btn" type="button" aria-label="Done, close keypad" hidden>DONE</button>
+    </span>
+    <span id="${inputId}-sats" class="leg-sats" hidden></span>
   </div>`;
 
 const sheetHead = (titleId: string, title: string, closeLabel: string) => `
@@ -272,6 +282,7 @@ app.innerHTML = `
       <div class="panel">
         ${leg("top", "amount", "from-trigger", prefs.from, prefs.amount)}
         <div class="divider">
+          <span id="swap-cap" class="swap-cap" aria-hidden="true"></span>
           <button id="swap" class="swap" type="button" aria-label="Flip direction" title="Flip direction: type the other amount">${flipIcon}</button>
         </div>
         ${leg("bottom", "result", "to-trigger", prefs.to, prefs.result)}
@@ -287,10 +298,14 @@ app.innerHTML = `
         <span id="status-inverse" class="status-rate status-inverse"></span>
         <span id="status-hint" class="status-hint"></span>
       </button>
+      <section id="pairs" class="pairs" aria-labelledby="pairs-label" hidden>
+        <h3 id="pairs-label" class="group-label">RECENT PAIRS</h3>
+        <div id="pairs-row" class="pairs-row"></div>
+      </section>
       <p id="main-error" class="sr-only" role="alert"></p>
       <p id="announce" class="sr-only" role="status" aria-live="polite"></p>
     </section>
-    <footer class="foot"><span>MID-MARKET RATES</span> · <span>NO FEES ADDED</span> · <span>DATA: COINBASE</span></footer>
+    <footer class="foot"><span>REAL MARKET RATE</span><span>YOUR CARD MAY CHARGE MORE</span><span>DATA: COINBASE</span></footer>
   </main>
   ${
     tipsAllowed
@@ -307,6 +322,7 @@ app.innerHTML = `
     ${sheetHead("currency-picker-title", "FROM CURRENCY", "Close currency list")}
     <div class="sheet-search">
       <div class="well search-well">
+        ${searchIcon}
         <input id="currency-search" type="search" placeholder="SEARCH" aria-label="Search currencies" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search">
       </div>
     </div>
@@ -330,7 +346,7 @@ app.innerHTML = `
         <h3 id="text-label" class="group-label">TEXT</h3>
         <div class="list">
           <button id="large-text" class="list-row" type="button" role="switch" aria-checked="false">
-            <span class="row-title">LARGE TEXT</span><span class="switch" aria-hidden="true"><span class="switch-knob"></span></span>
+            <span class="row-title">LARGE TEXT</span><span class="switch" aria-hidden="true"><span class="switch-text switch-on">ON</span><span class="switch-text switch-off">OFF</span><span class="switch-knob"></span></span>
           </button>
         </div>
       </section>
@@ -495,9 +511,10 @@ function paintFields() {
   legs[source].classList.remove("is-driven");
   legs[drivenSide].classList.add("is-driven");
   byId(source === "top" ? "amount-role" : "result-role").textContent = "YOU TYPE";
-  byId(source === "top" ? "result-role" : "amount-role").textContent = "≈ YOU GET";
+  byId(source === "top" ? "result-role" : "amount-role").textContent = "YOU GET";
   const typedCode = source === "top" ? fromCode : toCode;
   const drivenCode = source === "top" ? toCode : fromCode;
+  byId("swap-cap").textContent = `TYPE IN ${drivenCode}`;
   const sourceInput = source === "top" ? amount : result;
   const drivenInput = source === "top" ? result : amount;
   sourceInput.setAttribute("aria-label", `You type, in ${nameOf(typedCode)}`);
@@ -508,13 +525,29 @@ function paintFields() {
   swapButton.setAttribute("aria-label", `Flip: type in ${nameOf(drivenCode)} instead`);
   swapButton.title = `Type in ${drivenCode} instead`;
   byId(source === "top" ? "amount-copy" : "result-copy").hidden = true;
-  byId(source === "top" ? "result-copy" : "amount-copy").hidden = !drivenInput.value;
+  byId(source === "top" ? "result-copy" : "amount-copy").hidden =
+    !drivenInput.value || document.activeElement === drivenInput;
   byId(source === "top" ? "result-copy" : "amount-copy").setAttribute(
     "aria-label",
     `Copy ${drivenInput.value} ${nameOf(drivenCode)}`,
   );
+  paintSats(amount, fromCode, "amount-sats");
+  paintSats(result, toCode, "result-sats");
   fitInput(amount);
   fitInput(result);
+}
+
+/** Bitcoin amounts also read in sats (1 BTC = 100,000,000 sats). */
+function paintSats(input: HTMLInputElement, code: string, id: string) {
+  const node = byId(id);
+  const parsed = code === "BTC" && input.value ? parse(input.value) : null;
+  if (!parsed?.valid) {
+    node.hidden = true;
+    return;
+  }
+  const sats = new Big(parsed.normalized).times(1e8).round(0, Big.roundHalfUp);
+  node.textContent = `= ${new Intl.NumberFormat().format(BigInt(sats.toFixed(0)))} SATS`;
+  node.hidden = false;
 }
 
 let announceTimer = 0;
@@ -536,10 +569,11 @@ function announce(prefix = "") {
         : [result.value, toCode, amount.value, fromCode];
     if (typed && got) parts.push(`${typed} ${nameOf(typedCode)} is ${got} ${nameOf(gotCode)}`);
     if (parts.length) say(parts.join(". "));
-  }, prefix ? 150 : 700);
+  }, prefix ? 250 : 700);
 }
 
 function renderConversion() {
+  finishTally();
   const rate = table?.rates[toCode];
   const fromCurrency = getCurrency(fromCode);
   const toCurrency = getCurrency(toCode);
@@ -572,18 +606,68 @@ function renderConversion() {
       source === "top"
         ? calculate(parsed.normalized, rate)!
         : calculateInverse(parsed.normalized, rate)!;
+    const before = parse(drivenInput.value);
     drivenInput.value = formatResult(mid, drivenCurrency);
+    if (tallyNext && before.valid) tally(drivenInput, before.normalized, mid, drivenCurrency);
   } else {
     // empty, invalid or no rate: never leave a stale number standing
     drivenInput.value = "";
     if (sourceInput.value && parsed.valid && !rate && status !== "loading" && status !== "refreshing")
-      drivenError.textContent = "NO RATE";
+      drivenError.textContent = table ? "NO RATE" : navigator.onLine ? "NO DATA" : "OFFLINE";
   }
 
+  tallyNext = false;
   paintFields();
   renderStatus();
   save();
 }
+
+/**
+ * After a flip, a pick, or a refresh you asked for, the answer counts up like a
+ * game score. Only the pixels animate: everything that reads the field (save,
+ * COPY, sats, VoiceOver) sees the final value, and any interaction finishes the
+ * count at once.
+ */
+let tallyNext = false;
+let tallyTimer = 0;
+let tallyDone: (() => void) | null = null;
+const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function finishTally() {
+  tallyDone?.();
+}
+function tally(
+  input: HTMLInputElement,
+  from: string,
+  to: string,
+  currency: NonNullable<ReturnType<typeof getCurrency>>,
+) {
+  finishTally();
+  const a = Number(from);
+  const b = Number(to);
+  const finalText = input.value;
+  if (reduceMotion() || !Number.isFinite(a) || !Number.isFinite(b) || a === b) return;
+  if (document.activeElement === input) return; // never rewrite a field being edited
+  const well = input.closest(".well")!;
+  well.classList.add("is-tallying");
+  let k = 0;
+  tallyDone = () => {
+    window.clearInterval(tallyTimer);
+    tallyDone = null;
+    input.value = finalText;
+    well.classList.remove("is-tallying");
+    fitInput(input);
+  };
+  tallyTimer = window.setInterval(() => {
+    k += 1;
+    if (k >= 5) return finishTally();
+    input.value = formatResult(String(a + ((b - a) * k) / 5), currency);
+    fitInput(input);
+  }, 40);
+}
+// any touch, key or copy settles the number immediately
+document.addEventListener("pointerdown", finishTally, true);
+document.addEventListener("keydown", finishTally, true);
+document.addEventListener("focusin", finishTally, true); // e.g. a VoiceOver swipe onto the answer
 
 function shortReason(reason: string) {
   if (/18 significant/.test(reason)) return "MAX LENGTH";
@@ -696,7 +780,10 @@ function renderStatus() {
   let label = "";
   let hint = "";
   const when = table ? whenLabel(table.fetchedAt) : "";
+  const age = table ? Date.now() - table.fetchedAt : 0;
   if (table && !pairRate && !refreshing) kind = "error";
+  // rates refresh themselves every minute while open: only call them saved after 10 min
+  if (kind === "stale" && age < 10 * 60_000 && !lastFetchFailed) kind = "fresh";
   switch (kind) {
     case "loading":
       label = "LOADING";
@@ -711,12 +798,23 @@ function renderStatus() {
       hint = lastFetchFailed ? "COULDN'T UPDATE · TAP TO RETRY" : "";
       break;
     case "stale":
-      label = "CACHED";
-      hint = lastFetchFailed ? "COULDN'T UPDATE · TAP TO RETRY" : "TAP TO UPDATE";
+      label = "SAVED";
+      hint =
+        age > 24 * 3_600_000
+          ? lastFetchFailed
+            ? "OLD RATES · COULDN'T UPDATE"
+            : "OLD RATES · TAP TO UPDATE"
+          : lastFetchFailed
+            ? "COULDN'T UPDATE · TAP TO RETRY"
+            : "TAP TO UPDATE";
       break;
     case "offline":
       label = "OFFLINE";
-      hint = table ? "SHOWING SAVED RATES · TAP TO RETRY" : "NO SAVED RATES · TAP TO RETRY";
+      hint = !table
+        ? "NO SAVED RATES · TAP TO RETRY"
+        : age > 24 * 3_600_000
+          ? "OLD SAVED RATES · TAP TO RETRY"
+          : "SHOWING SAVED RATES · TAP TO RETRY";
       break;
     default:
       label = "NO RATES";
@@ -727,18 +825,21 @@ function renderStatus() {
   }
   statusButton.dataset.kind = kind;
   byId("status-label").textContent = label;
-  byId("status-when").textContent = when && kind !== "error" ? when : "";
-  byId("status-rate").textContent =
-    pairRate && kind !== "error" ? `1 ${fromCode} = ${formatRate(pairRate)} ${toCode}` : "";
+  byId("status-when").textContent = when && kind !== "error" ? `UPDATED ${when}` : "";
+  // lead with the currency you're typing in
   const inverse = pairRate ? calculateInverse("1", pairRate) : null;
-  byId("status-inverse").textContent =
-    inverse && kind !== "error" ? `1 ${toCode} = ${formatRate(inverse)} ${fromCode}` : "";
+  const forward = pairRate ? rateLine(fromCode, toCode, pairRate) : "";
+  const backward = inverse ? rateLine(toCode, fromCode, inverse) : "";
+  const [main, second] = source === "top" ? [forward, backward] : [backward, forward];
+  byId("status-rate").innerHTML =
+    main && kind !== "error" ? main.replace(" = ", ' <span class="eq">=</span> ') : "";
+  byId("status-inverse").textContent = second && kind !== "error" ? second : "";
   byId("status-hint").textContent = hint;
   statusButton.setAttribute(
     "aria-label",
     [
       label,
-      byId("status-rate").textContent,
+      byId("status-rate").textContent ?? "",
       byId("status-inverse").textContent,
       when ? `updated ${when}` : "",
       hint || "Refresh rates",
@@ -749,12 +850,22 @@ function renderStatus() {
   statusButton.setAttribute("aria-busy", String(refreshing));
   const alertText = kind === "error" ? hint.replace(" · TAP TO RETRY", "") : "";
   if (byId("main-error").textContent !== alertText) byId("main-error").textContent = alertText;
-  byId("settings-updated").textContent = when;
+  byId("settings-updated").textContent = when ? `UPDATED ${when}` : "";
+}
+
+/** "1 ZAR = 0.0558 USD", or in sats when a bitcoin rate is tiny: "1 ZAR = 58 SATS". */
+function rateLine(a: string, b: string, rate: string) {
+  if (b === "BTC" && Number(rate) < 0.0001) {
+    const sats = new Big(rate).times(1e8);
+    const shown = sats.gte(10) ? sats.round(0).toFixed(0) : sats.round(2).toString();
+    return `1 ${a} = ${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(Number(shown))} SATS`;
+  }
+  return `1 ${a} = ${formatRate(rate)} ${b}`;
 }
 
 /* ---------- rates ---------- */
 
-async function loadRates(force = false) {
+async function loadRates(force = false, userAsked = false) {
   abortController?.abort();
   const own = new AbortController();
   abortController = own;
@@ -762,13 +873,14 @@ async function loadRates(force = false) {
   renderStatus();
   const cached = await getCachedRates(fromCode);
   if (own.signal.aborted) return;
+  const willFetch = force || !cached || !isFresh(cached.fetchedAt);
   if (cached) {
     table = cached;
-    status = navigator.onLine
-      ? isFresh(cached.fetchedAt)
-        ? "fresh"
-        : "stale"
-      : "offline";
+    status = !navigator.onLine
+      ? "offline"
+      : willFetch
+        ? "refreshing" // a fetch follows: don't flash SAVED in between
+        : "fresh";
     log(`Loaded cached ${cached.base} rates`);
     renderConversion();
   }
@@ -783,12 +895,16 @@ async function loadRates(force = false) {
     if (own.signal.aborted || loaded.base !== fromCode) return;
     if (!loaded.rates[toCode])
       throw new Error(`No current rate is available for ${fromCode} → ${toCode}.`);
+    const previous = table;
     table = loaded;
     requestDuration = Math.round(performance.now() - started);
     await setCachedRates(loaded);
+    const changed = Boolean(previous) && JSON.stringify(previous?.rates) !== JSON.stringify(loaded.rates);
     status = "fresh";
     lastError = "None";
     lastFetchFailed = false;
+    tallyNext = changed && userAsked;
+    pingLive();
     log(`Loaded ${Object.keys(loaded.rates).length} valid rates`);
   } catch (error) {
     if (own.signal.aborted) return;
@@ -801,6 +917,78 @@ async function loadRates(force = false) {
   }
   renderConversion();
   renderDebug();
+}
+
+function pingLive() {
+  const dot = statusButton.querySelector(".status-dot")!;
+  dot.classList.remove("is-ping");
+  void (dot as HTMLElement).offsetWidth;
+  dot.classList.add("is-ping");
+  window.setTimeout(() => dot.classList.remove("is-ping"), 500);
+}
+
+/* ---------- recent pairs ---------- */
+
+const PAIRS_KEY = "deac-currency-pairs-v1";
+function loadPairs(): [string, string][] {
+  try {
+    const list = JSON.parse(localStorage.getItem(PAIRS_KEY) ?? "[]") as unknown;
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((p): p is string => typeof p === "string")
+      .map((p) => p.split(">") as [string, string])
+      .filter(([a, b]) => getCurrency(a) && getCurrency(b) && a !== b);
+  } catch {
+    return [];
+  }
+}
+function pushPair(a: string, b: string) {
+  const key = `${a}>${b}`;
+  const reverse = `${b}>${a}`; // B→A is the same pair (the flip button covers direction)
+  const list = [key, ...loadPairs().map(([x, y]) => `${x}>${y}`).filter((k) => k !== key && k !== reverse)].slice(0, 6);
+  try {
+    localStorage.setItem(PAIRS_KEY, JSON.stringify(list));
+  } catch {
+    /* non-fatal */
+  }
+}
+function renderPairs() {
+  const pairs = loadPairs().slice(0, 4);
+  const isCurrent = ([a, b]: [string, string]) =>
+    (a === fromCode && b === toCode) || (a === toCode && b === fromCode);
+  byId("pairs").hidden = pairs.filter((p) => !isCurrent(p)).length === 0;
+  const focusedKey = (document.activeElement as HTMLElement | null)?.dataset?.pair;
+  byId("pairs-row").innerHTML = pairs
+    .map(
+      (p) =>
+        `<button type="button" class="pair-chip" data-pair="${p[0]}>${p[1]}" data-from="${p[0]}" data-to="${p[1]}" aria-pressed="${isCurrent(p)}" aria-label="${nameOf(p[0])} to ${nameOf(p[1])}"><span>${p[0]}</span>${arrowIcon}<span>${p[1]}</span></button>`,
+    )
+    .join("");
+  // keep focus on the chip that was tapped (the row is rebuilt in place, same order)
+  if (focusedKey)
+    byId("pairs-row").querySelector<HTMLElement>(`[data-pair="${focusedKey}"]`)?.focus({ preventScroll: true });
+}
+/** Switch the pair (from a chip or the picker), remembering where you were. */
+function setPair(a: string, b: string, fromChip = false) {
+  if (a === fromCode && b === toCode) return;
+  if (!fromChip) {
+    // chips keep their order so they don't move under your finger
+    pushPair(fromCode, toCode);
+    pushPair(a, b);
+  }
+  const baseChanged = a !== fromCode;
+  fromCode = a;
+  toCode = b;
+  syncCurrencyTriggers();
+  tallyNext = true;
+  if (baseChanged) {
+    table = null;
+    status = "loading";
+  }
+  renderConversion();
+  renderPairs();
+  announce(`${nameOf(fromCode)} to ${nameOf(toCode)}`);
+  if (baseChanged || !table?.rates[toCode]) void loadRates(!baseChanged);
 }
 
 /* ---------- currency picker ---------- */
@@ -841,10 +1029,17 @@ function pushRecent(code: string) {
 }
 function renderRecents() {
   const selected = currencyPickerTarget === "from" ? fromCode : toCode;
-  const codes = loadRecents().filter((c) => c !== selected).slice(0, 4);
+  const other = currencyPickerTarget === "from" ? toCode : fromCode;
+  // history first, topped up with the usual suspects
+  const codes = [...new Set([...loadRecents(), "USD", "EUR", "GBP", "BTC"])]
+    .filter((c) => c !== selected)
+    .slice(0, 4);
   byId("currency-recents").hidden = codes.length === 0 || Boolean(currencySearch.value.trim());
   byId("currency-recents-row").innerHTML = codes
-    .map((c) => `<button type="button" class="recent-chip" data-code="${c}" aria-label="Recent: ${c} ${nameOf(c)}">${c}</button>`)
+    .map(
+      (c) =>
+        `<button type="button" class="recent-chip" data-code="${c}" aria-label="Recent: ${c} ${nameOf(c)}${c === other ? ", selecting trades places" : ""}">${c}</button>`,
+    )
     .join("");
 }
 
@@ -864,6 +1059,18 @@ function bestMatch(): string | undefined {
   return visible.sort((a, b) => score(a) - score(b))[0]?.dataset.code;
 }
 
+/** Light up the matched letters ("do" → DOllar). */
+function highlight(node: Element, q: string) {
+  const el = node as HTMLElement;
+  const text = (el.dataset.text ??= el.textContent ?? "");
+  const i = q ? text.toLowerCase().indexOf(q) : -1;
+  if (i < 0) {
+    el.textContent = text;
+    return;
+  }
+  el.innerHTML = `${text.slice(0, i)}<mark>${text.slice(i, i + q.length)}</mark>${text.slice(i + q.length)}`;
+}
+
 function filterCurrencies() {
   const q = currencySearch.value.trim().toLowerCase();
   let shown = 0;
@@ -873,6 +1080,8 @@ function filterCurrencies() {
       const match = !q || (btn.dataset.search ?? "").includes(q);
       btn.hidden = !match;
       if (match) groupShown += 1;
+      highlight(btn.querySelector(".opt-code")!, q);
+      highlight(btn.querySelector(".opt-name")!, q);
     });
     group.hidden = groupShown === 0;
     shown += groupShown;
@@ -886,7 +1095,8 @@ function filterCurrencies() {
 
 function openCurrencyPicker(target: "from" | "to") {
   currencyPickerTarget = target;
-  currencyPickerTitle.textContent = target === "from" ? "FROM CURRENCY" : "TO CURRENCY";
+  const typing = (target === "from") === (source === "top");
+  currencyPickerTitle.textContent = typing ? "YOU TYPE" : "YOU GET";
   currencySearch.value = "";
   filterCurrencies();
   paintCurrencyPickerSelection();
@@ -910,25 +1120,9 @@ function applyCurrencyPick(code: string) {
   closeCurrencyPicker();
   pushRecent(code);
   if (code === current) return;
-  if (code === other) {
-    // Picking the other side's currency swaps the pair.
-    [fromCode, toCode] = [toCode, fromCode];
-  } else if (target === "from") {
-    fromCode = code;
-  } else {
-    toCode = code;
-    syncCurrencyTriggers();
-    renderConversion();
-    announce(`${nameOf(fromCode)} to ${nameOf(toCode)}`);
-    if (!table?.rates[toCode]) void loadRates(true);
-    return;
-  }
-  syncCurrencyTriggers();
-  table = null;
-  status = "loading"; // not "NO RATE" while the new base's rates load
-  renderConversion();
-  announce(`${nameOf(fromCode)} to ${nameOf(toCode)}`);
-  void loadRates();
+  if (code === other) setPair(toCode, fromCode); // picking the other side trades places
+  else if (target === "from") setPair(code, toCode);
+  else setPair(fromCode, code);
 }
 
 /* ---------- events: converter ---------- */
@@ -972,6 +1166,21 @@ for (const input of [amount, result]) {
   });
 }
 
+// DONE closes the decimal pad (it has no return key on iPhone).
+for (const [doneId, input] of [["amount-done", amount], ["result-done", result]] as const) {
+  const done = byId<HTMLButtonElement>(doneId);
+  done.addEventListener("pointerdown", (event) => event.preventDefault()); // keep focus until click
+  done.addEventListener("click", () => input.blur());
+  input.addEventListener("focus", () => {
+    done.hidden = false;
+    paintFields();
+  });
+  input.addEventListener("blur", () => {
+    done.hidden = true;
+    window.setTimeout(paintFields, 0);
+  });
+}
+
 // Copy the computed amount as shown, minus grouping, so it pastes as a number.
 for (const [btnId, input] of [["amount-copy", amount], ["result-copy", result]] as const) {
   const btn = byId<HTMLButtonElement>(btnId);
@@ -982,7 +1191,12 @@ for (const [btnId, input] of [["amount-copy", amount], ["result-copy", result]] 
     window.clearTimeout(resetTimer);
     try {
       await navigator.clipboard.writeText(copyValue(input.value));
-      btn.textContent = "COPIED";
+      btn.innerHTML = `${checkIcon}COPIED`;
+      const well = input.closest(".well")!;
+      well.classList.remove("is-copied");
+      void (well as HTMLElement).offsetWidth;
+      well.classList.add("is-copied");
+      window.setTimeout(() => well.classList.remove("is-copied"), 400);
       say(`Copied ${input.value} ${nameOf(code)}`);
     } catch {
       btn.textContent = "CAN'T COPY";
@@ -1012,7 +1226,7 @@ document.addEventListener("pointerdown", (event) => {
   const active = document.activeElement;
   if (
     (active === amount || active === result) &&
-    !(event.target as HTMLElement).closest(".well")
+    !(event.target as HTMLElement).closest(".well, .done-btn")
   ) {
     (active as HTMLInputElement).blur();
   }
@@ -1036,6 +1250,7 @@ swapButton.addEventListener("click", () => {
   swapButton.classList.remove("is-flipping");
   void swapButton.offsetWidth;
   swapButton.classList.add("is-flipping");
+  tallyNext = true;
   renderConversion();
   announce(`Now typing ${nameOf(source === "top" ? fromCode : toCode)}`);
 });
@@ -1044,7 +1259,7 @@ statusButton.addEventListener("click", () => void refreshByUser());
 
 /** A refresh the user asked for, spoken when it lands. */
 async function refreshByUser() {
-  await loadRates(true);
+  await loadRates(true, true);
   if (status === "fresh" && table) say(`Rates updated, ${whenLabel(table.fetchedAt)}`);
   else if (lastFetchFailed) say("Couldn't update rates");
 }
@@ -1063,7 +1278,16 @@ function wireSheet(dialog: HTMLDialogElement, onClose: () => void = () => dialog
 }
 
 wireSheet(currencyPicker, closeCurrencyPicker);
+byId("pairs-row").addEventListener("click", (event) => {
+  const chip = (event.target as HTMLElement).closest<HTMLButtonElement>(".pair-chip");
+  if (chip?.dataset.from && chip.dataset.to) setPair(chip.dataset.from, chip.dataset.to, true);
+});
 currencySearch.addEventListener("input", filterCurrencies);
+// with a hardware keyboard, typing a letter anywhere in the picker searches
+currencyPicker.addEventListener("keydown", (event) => {
+  if (event.target === currencySearch || event.metaKey || event.ctrlKey || event.altKey) return;
+  if (/^[a-z$€£¥₿]$/i.test(event.key)) currencySearch.focus();
+});
 currencySearch.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     // search inputs swallow Escape to clear themselves; close the sheet instead
@@ -1197,6 +1421,7 @@ window.addEventListener("offline", () => {
 });
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
+  applyTextSize(); // the iOS text size may have changed meanwhile
   if (table && !isFresh(table.fetchedAt)) void loadRates();
   else renderStatus();
 });
@@ -1259,7 +1484,9 @@ function applyTextSize() {
 byId("large-text").addEventListener("click", () => {
   const next = document.documentElement.dataset.text !== "large";
   try {
-    localStorage.setItem(TEXT_KEY, next ? "on" : "off");
+    // matching the iOS text size again means "follow iOS" from now on
+    if (next === systemPrefersLargeText()) localStorage.removeItem(TEXT_KEY);
+    else localStorage.setItem(TEXT_KEY, next ? "on" : "off");
   } catch {
     /* ignore */
   }
@@ -1273,6 +1500,7 @@ new ResizeObserver(() => {
 }).observe(amount);
 
 log("Application started");
+renderPairs();
 syncCurrencyTriggers();
 paintFields();
 renderStatus();

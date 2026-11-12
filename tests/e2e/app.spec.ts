@@ -72,19 +72,19 @@ test("currency picker lists many currencies and updates the pair", async ({
   await page.locator("#from-trigger").click();
   const picker = page.locator("#currency-picker");
   await expect(picker).toBeVisible();
-  await expect(picker.getByRole("heading", { name: /from currency/i })).toBeVisible();
+  await expect(picker.getByRole("heading", { name: /you type/i })).toBeVisible();
   await expect(picker.locator(".currency-option")).toHaveCount(20);
-  await expect(picker.getByRole("button", { name: /USD US Dollar/i })).toBeVisible();
-  await expect(picker.getByRole("button", { name: /EUR Euro/i })).toBeVisible();
-  await expect(picker.getByRole("button", { name: /BTC Bitcoin/i })).toBeVisible();
-  await picker.getByRole("button", { name: /EUR Euro/i }).click();
+  await expect(picker.locator('.currency-option[data-code="USD"]')).toBeVisible();
+  await expect(picker.locator('.currency-option[data-code="EUR"]')).toBeVisible();
+  await expect(picker.locator('.currency-option[data-code="BTC"]')).toBeVisible();
+  await picker.locator('.currency-option[data-code="EUR"]').click();
   await expect(picker).toBeHidden();
   await expect(page.locator("#from-trigger")).toContainText("EUR");
 
   await page.locator("#to-trigger").click();
   await expect(picker).toBeVisible();
-  await expect(picker.getByRole("heading", { name: /to currency/i })).toBeVisible();
-  await picker.getByRole("button", { name: /BTC Bitcoin/i }).click();
+  await expect(picker.getByRole("heading", { name: /you get/i })).toBeVisible();
+  await picker.locator('.currency-option[data-code="BTC"]').click();
   await expect(page.locator("#to-trigger")).toContainText("BTC");
 });
 
@@ -213,7 +213,7 @@ test("picker search filters, and picking the other side swaps the pair", async (
   await page.locator("#currency-search").fill("yen");
   await expect(picker.locator(".currency-option:visible")).toHaveCount(1);
   await page.locator("#currency-search").fill("");
-  await picker.getByRole("button", { name: /USD US Dollar/i }).click();
+  await picker.locator('.currency-option[data-code="USD"]').click();
   await expect(page.locator("#from-trigger")).toContainText("USD");
   await expect(page.locator("#to-trigger")).toContainText("ZAR");
 });
@@ -272,9 +272,10 @@ test("recent picks appear at the top of the picker; Enter picks the best match",
   await page.locator("#currency-search").press("Enter");
   await expect(page.locator("#to-trigger")).toContainText("EUR");
   await page.locator("#to-trigger").click();
-  // the only recent pick is the current one, which isn't repeated
-  await expect(page.locator("#currency-recents")).toBeHidden();
-  await page.locator("#currency-picker").getByRole("button", { name: /USD US Dollar/ }).click();
+  // the current pick isn't repeated; the row is topped up with suggestions
+  await expect(page.locator("#currency-recents")).toBeVisible();
+  await expect(page.locator(".recent-chip", { hasText: /^EUR$/ })).toHaveCount(0);
+  await page.locator("#currency-picker").locator('.currency-option[data-code="USD"]').click();
   await page.locator("#to-trigger").click();
   await expect(page.locator("#currency-recents")).toBeVisible();
   await page.locator(".recent-chip", { hasText: "EUR" }).click();
@@ -347,4 +348,56 @@ test("a 13th whole digit is refused with MAX LENGTH", async ({ page }) => {
   await expect(page.locator("#amount-error")).toHaveText("MAX LENGTH");
   await page.locator("#amount").fill("12");
   await expect(page.locator("#amount-error")).toHaveText("");
+});
+
+test("recent pairs become one-tap chips", async ({ page }) => {
+  await mockCoinbase(page);
+  await page.goto("/");
+  await expect(page.locator("#pairs")).toBeHidden();
+  await page.locator("#to-trigger").click();
+  await page.locator('#currency-picker .currency-option[data-code="EUR"]').click();
+  const chip = page.locator(".pair-chip", { hasText: "USD" });
+  await expect(chip).toHaveAccessibleName("South African Rand to US Dollar");
+  await chip.click();
+  await expect(page.locator("#to-trigger")).toContainText("USD");
+  await expect(page.locator(".pair-chip").first()).toHaveAccessibleName("South African Rand to Euro");
+});
+
+test("bitcoin amounts also read in sats, and the rate card leads with the typed currency", async ({ page }) => {
+  await mockCoinbase(page);
+  await page.goto("/");
+  await page.locator("#to-trigger").click();
+  await page.locator('#currency-picker .currency-option[data-code="BTC"]').click();
+  await page.locator("#amount").fill("500");
+  await expect(page.locator("#result-sats")).toHaveText("= 50,000 SATS");
+  await expect(page.locator("#status-rate")).toHaveText("1 ZAR = 100 SATS");
+  await page.locator("#swap").click();
+  await expect(page.locator("#status-rate")).toHaveText(/^1 BTC = /);
+  await expect(page.locator("#swap-cap")).toHaveText("TYPE IN ZAR");
+});
+
+test("DONE shows while typing and closes the keypad", async ({ page }) => {
+  await mockCoinbase(page);
+  await page.goto("/");
+  await expect(page.locator("#amount-done")).toBeHidden();
+  await page.locator("#amount").focus();
+  await expect(page.locator("#amount-done")).toBeVisible();
+  await page.locator("#amount-done").click();
+  await expect(page.locator("#amount")).not.toBeFocused();
+  await expect(page.locator("#amount-done")).toBeHidden();
+});
+
+test("the tally animation never leaks an in-between value", async ({ page }) => {
+  await mockCoinbase(page);
+  await page.goto("/");
+  await page.locator("#amount").fill("100");
+  await page.locator("#swap").click();
+  // read synchronously, mid-animation: saved value and copy label are already final
+  const state = await page.evaluate(() => ({
+    saved: JSON.parse(localStorage.getItem("deac-currency-preferences-v1") ?? "{}").amount,
+    copy: document.getElementById("amount-copy")?.getAttribute("aria-label"),
+  }));
+  expect(state.saved).toBe("1,792.11");
+  expect(state.copy).toBe("Copy 1,792.11 South African Rand");
+  await expect(page.locator("#amount")).toHaveValue("1,792.11");
 });

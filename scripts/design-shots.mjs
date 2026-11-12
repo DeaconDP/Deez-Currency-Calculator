@@ -93,15 +93,17 @@ for (const d of devices) {
   await page.keyboard.press("Escape");
 
   await page.locator("#to-trigger").click();
-  await page.locator("#currency-picker").getByRole("button", { name: /EUR Euro/ }).click();
+  await page.locator('#currency-picker .currency-option[data-code="EUR"]').click();
   await page.locator("#to-trigger").click();
-  await page.locator("#currency-picker").getByRole("button", { name: /BTC Bitcoin/ }).click();
+  await page.locator('#currency-picker .currency-option[data-code="BTC"]').click();
   await page.locator("#to-trigger").click();
   await shot("05b-picker-recents");
   await page.keyboard.press("Escape");
+  await page.locator("#amount").fill("500");
+  await page.locator("#amount").blur();
   await shot("05c-btc-pair");
   await page.locator("#to-trigger").click();
-  await page.locator("#currency-picker").getByRole("button", { name: /USD US Dollar/ }).click();
+  await page.locator('#currency-picker .currency-option[data-code="USD"]').click();
 
   await page.locator("#design-open").click();
   await page.locator("#large-text").click();

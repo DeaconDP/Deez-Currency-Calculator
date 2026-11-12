@@ -32,6 +32,7 @@
   --on-money: #000;
   --dot: rgba(255, 255, 255, 0.05);
   --gutter: 16px;
+  --currency-col: 112px;
 
   color-scheme: dark;
   font-family: "Press Start 2P", ui-monospace, monospace;
@@ -266,25 +267,32 @@ button {
     0 4px 0 var(--edge);
 }
 
-.leg-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  height: 24px;
-  margin-bottom: 8px;
+/* label + aside on one line, the field below; DOM order is label, field,
+   aside, so VoiceOver hears what a field is before its COPY / DONE */
+.leg {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label aside"
+    "row row"
+    "sats sats";
+  column-gap: 8px;
 }
 
 .leg-label {
+  grid-area: label;
   display: flex;
+  align-items: center;
   gap: 8px;
   min-width: 0;
+  height: 24px;
+  margin-bottom: 8px;
   white-space: nowrap;
 }
 
 .leg-role {
   flex: none;
-  color: var(--text);
+  color: var(--muted);
 }
 
 .leg.is-driven .leg-role {
@@ -294,14 +302,25 @@ button {
 .leg-name {
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--muted);
+  color: var(--text);
 }
 
 .leg-aside {
+  grid-area: aside;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
-  flex: none;
+  height: 24px;
+}
+
+/* right-aligned under the amount, not under the currency button */
+.leg-sats {
+  grid-area: sats;
+  margin: 4px 0 0;
+  padding-right: calc(var(--currency-col) + 8px + 10px);
+  text-align: right;
+  color: var(--muted);
 }
 
 .field-error {
@@ -336,6 +355,7 @@ button {
 }
 
 .leg-row {
+  grid-area: row;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 112px;
   gap: 8px;
@@ -544,6 +564,7 @@ button {
 .status-dot {
   width: 8px;
   height: 8px;
+  margin-right: 2px;
   background: var(--tone);
   box-shadow: 0 0 0 2px var(--edge);
 }
@@ -889,9 +910,8 @@ dialog.sheet::backdrop {
   text-align: left;
 }
 
-/* the chosen look is a latched (pressed-in) key */
+/* the chosen look: gold edge and a pressed-in bevel (no offset, so the grid stays aligned) */
 .look[aria-checked="true"] {
-  transform: translateY(4px);
   border-color: var(--money);
   box-shadow:
     inset 2px 2px 0 var(--lo),
@@ -1125,6 +1145,10 @@ button.list-row:active {
 /* ---------- larger screens ---------- */
 
 @media (max-width: 389px) {
+  :root {
+    --currency-col: 96px;
+  }
+
   .leg-row {
     grid-template-columns: minmax(0, 1fr) 96px;
   }
@@ -1179,16 +1203,42 @@ button.list-row:active {
   line-height: 24px;
 }
 
-:root[data-text="large"] .leg-head {
-  height: auto;
-  min-height: 24px;
-  align-items: flex-end;
-}
-
 :root[data-text="large"] .leg-label {
   flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
   gap: 4px;
+  height: auto;
   white-space: normal;
+}
+
+:root[data-text="large"] .leg-aside {
+  align-self: end;
+  height: auto;
+  min-height: 36px; /* DONE/COPY appearing never shifts the layout */
+  margin-bottom: 8px;
+}
+
+/* Large Text: the caption gets its own line above the gold button */
+:root[data-text="large"] .divider {
+  flex-direction: column;
+  gap: 8px;
+  height: auto;
+}
+
+:root[data-text="large"] .divider::before {
+  top: auto;
+  bottom: 24px;
+}
+
+:root[data-text="large"] .swap-cap {
+  position: static;
+  max-width: none;
+  padding: 0;
+  transform: none;
+  background: none;
+  font-size: 16px;
+  line-height: 24px;
 }
 
 :root[data-text="large"] .copy-btn {
@@ -1210,3 +1260,223 @@ button.list-row:active {
   margin-top: 4px;
 }
 
+
+/* ---------- round 7: guidance, pairs, previews, motion ---------- */
+
+.swap-cap {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  max-width: calc(50% - 32px);
+  padding-right: 8px;
+  transform: translateY(-50%);
+  background: var(--surface);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-rate {
+  color: var(--text);
+}
+
+.status-rate .eq {
+  color: var(--muted);
+}
+
+.pairs {
+  margin-top: 8px;
+}
+
+.pairs-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 8px;
+  padding-bottom: 4px;
+}
+
+.pair-chip {
+  display: inline-flex;
+  flex: 0 1 auto; /* tag-sized: an odd chip never stretches across the row */
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 2px 12px 0;
+  font-size: 16px;
+  line-height: 16px;
+  background: var(--control);
+  color: var(--control-text);
+  border: 2px solid var(--edge);
+  box-shadow:
+    inset 2px 2px 0 var(--hi),
+    inset -2px -2px 0 var(--lo),
+    0 2px 0 var(--edge);
+}
+
+.pair-chip[aria-pressed="true"] {
+  border-color: var(--money);
+  box-shadow: inset 2px 2px 0 var(--lo);
+  transform: translateY(2px);
+}
+
+.pair-chip:active {
+  transform: translateY(4px);
+  box-shadow:
+    inset 2px 2px 0 var(--lo),
+    0 0 0 var(--edge);
+}
+
+.pair-chip .icon-arrow {
+  color: var(--money);
+  margin-top: -2px;
+}
+
+.foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+:root[data-text="large"] .foot span {
+  white-space: normal;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.done-btn {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.copy-btn .icon-check {
+  width: 8px;
+  height: 8px;
+}
+
+.look-lcd {
+  align-self: stretch;
+  padding: 4px 6px 2px;
+  border: 2px solid;
+  text-align: right;
+  font-size: 8px;
+  line-height: 8px;
+}
+
+.switch {
+  width: 64px;
+}
+
+[aria-checked="true"] > .switch .switch-knob {
+  left: 38px;
+}
+
+.switch-text {
+  position: absolute;
+  top: 8px;
+  font-size: 8px;
+  line-height: 8px;
+}
+
+.switch-on {
+  left: 6px;
+  color: var(--on-money);
+  visibility: hidden;
+}
+
+.switch-off {
+  right: 6px;
+  color: var(--muted);
+}
+
+[aria-checked="true"] > .switch .switch-on {
+  visibility: visible;
+}
+
+[aria-checked="true"] > .switch .switch-off {
+  visibility: hidden;
+}
+
+.search-well .icon-search {
+  color: var(--muted);
+}
+
+.search-well:focus-within .icon-search {
+  color: var(--focus);
+}
+
+.currency-option mark {
+  background: none;
+  color: var(--money);
+}
+
+/* COPY: the window flashes once */
+.well.is-copied {
+  animation: copied 320ms steps(1, end);
+}
+
+@keyframes copied {
+  0%,
+  50% {
+    background: var(--money);
+    border-color: var(--money);
+  }
+  25%,
+  75% {
+    background: var(--well);
+  }
+}
+
+.well.is-copied input {
+  animation: copied-text 320ms steps(1, end);
+}
+
+@keyframes copied-text {
+  0%,
+  50% {
+    color: var(--on-money);
+    text-shadow: none;
+  }
+}
+
+/* answer tally: a deeper score-counter shadow while it counts */
+.well.is-tallying input {
+  text-shadow: 0 4px 0 color-mix(in srgb, currentColor 30%, transparent);
+}
+
+/* refresh glyph turns in quarter steps while busy (keeps the sprite crisp) */
+.status[aria-busy="true"] .icon-refresh {
+  animation: spin 640ms steps(4, end) infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* fresh rates landed */
+.status-dot.is-ping {
+  animation: ping 450ms steps(3, end);
+}
+
+@keyframes ping {
+  from {
+    box-shadow:
+      0 0 0 2px var(--edge),
+      0 0 0 4px var(--live);
+  }
+  to {
+    box-shadow:
+      0 0 0 2px var(--edge),
+      0 0 0 6px transparent;
+  }
+}
