@@ -250,3 +250,33 @@ test("main page has no glance strip or bank fee", async ({ page }) => {
   await expect(page.locator("#fee-percent")).toHaveCount(0);
   await expect(page.locator("#favorites")).toHaveCount(0);
 });
+
+test("large text switch steps labels up and persists", async ({ page }) => {
+  await mockCoinbase(page);
+  await page.goto("/");
+  await page.locator("#design-open").click();
+  const toggle = page.locator("#large-text");
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator("html")).toHaveAttribute("data-text", "large");
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-text", "large");
+});
+
+test("recent picks appear at the top of the picker; Enter picks the best match", async ({ page }) => {
+  await mockCoinbase(page);
+  await page.goto("/");
+  await page.locator("#to-trigger").click();
+  await page.locator("#currency-search").fill("eur");
+  await page.locator("#currency-search").press("Enter");
+  await expect(page.locator("#to-trigger")).toContainText("EUR");
+  await page.locator("#to-trigger").click();
+  // the only recent pick is the current one, which isn't repeated
+  await expect(page.locator("#currency-recents")).toBeHidden();
+  await page.locator("#currency-picker").getByRole("button", { name: /USD US Dollar/ }).click();
+  await page.locator("#to-trigger").click();
+  await expect(page.locator("#currency-recents")).toBeVisible();
+  await page.locator(".recent-chip", { hasText: "EUR" }).click();
+  await expect(page.locator("#to-trigger")).toContainText("EUR");
+});

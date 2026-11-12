@@ -1,6 +1,6 @@
 // Design review screenshots: every screen at iPhone sizes, rates mocked.
 // Usage: TAURI_ENV_PLATFORM=ios pnpm dev --port 5199 &  node scripts/design-shots.mjs <outDir> [baseUrl]
-import { chromium } from "@playwright/test";
+import { chromium, webkit } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -20,7 +20,8 @@ const devices = [
   { name: "iphoneSE", width: 375, height: 667, scale: 2 },
 ];
 
-const browser = await chromium.launch();
+const engine = process.env.SHOTS_ENGINE === "chromium" ? chromium : webkit;
+const browser = await engine.launch();
 for (const d of devices) {
   const context = await browser.newContext({
     viewport: { width: d.width, height: d.height },
@@ -89,6 +90,26 @@ for (const d of devices) {
   await shot("08d-contrast-look");
   await page.locator("#design-open").click();
   await page.locator('[data-preset="default"]').click();
+  await page.keyboard.press("Escape");
+
+  await page.locator("#to-trigger").click();
+  await page.locator("#currency-picker").getByRole("button", { name: /EUR Euro/ }).click();
+  await page.locator("#to-trigger").click();
+  await page.locator("#currency-picker").getByRole("button", { name: /BTC Bitcoin/ }).click();
+  await page.locator("#to-trigger").click();
+  await shot("05b-picker-recents");
+  await page.keyboard.press("Escape");
+  await shot("05c-btc-pair");
+  await page.locator("#to-trigger").click();
+  await page.locator("#currency-picker").getByRole("button", { name: /USD US Dollar/ }).click();
+
+  await page.locator("#design-open").click();
+  await page.locator("#large-text").click();
+  await shot("07b-settings-large-text");
+  await page.keyboard.press("Escape");
+  await shot("07c-main-large-text");
+  await page.locator("#design-open").click();
+  await page.locator("#large-text").click();
   await page.keyboard.press("Escape");
 
   await page.locator("#amount").fill("1234567890123456789");

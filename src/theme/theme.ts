@@ -65,7 +65,7 @@ export const DESIGN_PRESETS: Record<
     control: "#306230",
     controlText: "#e0f8cf",
     text: "#e0f8cf",
-    muted: "#9bbc0f",
+    muted: "#8aa860",
     money: "#c4f04a",
     error: "#ffb0a0",
     focus: "#c4f04a",

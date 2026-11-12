@@ -80,9 +80,13 @@ const gearIcon = pixelIcon(
   16,
   32,
   [
-    [7, 0, 2, 3], [7, 13, 2, 3], [0, 7, 3, 2], [13, 7, 3, 2],
-    [2, 2, 2, 2], [12, 2, 2, 2], [2, 12, 2, 2], [12, 12, 2, 2],
-    [4, 4, 8, 2], [4, 10, 8, 2], [4, 4, 2, 8], [10, 4, 2, 8],
+    // teeth
+    [7, 1, 2, 2], [7, 13, 2, 2], [1, 7, 2, 2], [13, 7, 2, 2],
+    [3, 3, 2, 2], [11, 3, 2, 2], [3, 11, 2, 2], [11, 11, 2, 2],
+    // ring with a hollow hub
+    [5, 3, 6, 1], [4, 4, 8, 1], [3, 5, 3, 1], [10, 5, 3, 1],
+    [3, 6, 2, 4], [11, 6, 2, 4], [3, 10, 3, 1], [10, 10, 3, 1],
+    [4, 11, 8, 1], [5, 12, 6, 1],
   ],
   "icon-gear",
 );
@@ -159,7 +163,7 @@ const SEARCH_ALIASES: Record<string, string> = {
   USDC: "stablecoin circle",
   USDT: "stablecoin tether",
 };
-const rightIcon = pixelIcon(8, 16, [[2, 1, 1, 6], [3, 2, 1, 4], [4, 3, 1, 2]], "icon-right");
+const rightIcon = pixelIcon(16, 16, [[5, 3, 2, 10], [7, 5, 2, 6], [9, 7, 2, 2]], "icon-right");
 
 /* ---------- markup ---------- */
 
@@ -295,6 +299,10 @@ app.innerHTML = `
         <input id="currency-search" type="search" placeholder="SEARCH" aria-label="Search currencies" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" enterkeyhint="search">
       </div>
     </div>
+    <section id="currency-recents" class="currency-recents" aria-labelledby="recents-label" hidden>
+      <h3 id="recents-label" class="group-label">RECENT</h3>
+      <div id="currency-recents-row" class="recents-row"></div>
+    </section>
     <div id="currency-picker-list" class="sheet-body currency-picker-list">
       ${currencyPickerListMarkup}
       <p id="currency-empty" class="empty" hidden>NO MATCH</p>
@@ -306,6 +314,14 @@ app.innerHTML = `
       <section class="group" aria-labelledby="look-label">
         <h3 id="look-label" class="group-label">LOOK</h3>
         <div class="looks" role="radiogroup" aria-labelledby="look-label">${lookMarkup}</div>
+      </section>
+      <section class="group" aria-labelledby="text-label">
+        <h3 id="text-label" class="group-label">TEXT</h3>
+        <div class="list">
+          <button id="large-text" class="list-row" type="button" role="switch" aria-checked="false">
+            <span class="row-title">LARGE TEXT</span><span class="switch" aria-hidden="true"><span class="switch-knob"></span></span>
+          </button>
+        </div>
       </section>
       <section class="group" aria-labelledby="rates-label">
         <h3 id="rates-label" class="group-label">RATES</h3>
@@ -419,7 +435,8 @@ function fitInput(input: HTMLInputElement) {
   const chars = Math.max(input.value.length, 1);
   const width = input.clientWidth;
   if (!width) return;
-  const size = chars * 24 <= width ? 24 : chars * 16 <= width ? 16 : 8;
+  // never below 16px: amounts stay readable and iOS won't zoom on focus
+  const size = chars * 24 <= width ? 24 : 16;
   input.dataset.size = String(size);
 }
 
@@ -459,15 +476,24 @@ function paintFields() {
 }
 
 let announceTimer = 0;
-/** Spoken summary — only after the user acts (typing, flipping, picking). */
+/** Speak to VoiceOver; clearing first makes repeats (e.g. copying twice) speak again. */
+function say(text: string) {
+  const node = byId("announce");
+  node.textContent = "";
+  window.setTimeout(() => (node.textContent = text), 50);
+}
+/** Spoken summary — only after the user acts (typing, flipping, picking). Typed side first. */
 function announce(prefix = "") {
   window.clearTimeout(announceTimer);
   announceTimer = window.setTimeout(() => {
     const parts: string[] = [];
     if (prefix) parts.push(prefix);
-    if (amount.value && result.value)
-      parts.push(`${amount.value} ${nameOf(fromCode)} is ${result.value} ${nameOf(toCode)}`);
-    if (parts.length) byId("announce").textContent = parts.join(". ");
+    const [typed, typedCode, got, gotCode] =
+      source === "top"
+        ? [amount.value, fromCode, result.value, toCode]
+        : [result.value, toCode, amount.value, fromCode];
+    if (typed && got) parts.push(`${typed} ${nameOf(typedCode)} is ${got} ${nameOf(gotCode)}`);
+    if (parts.length) say(parts.join(". "));
   }, prefix ? 150 : 700);
 }
 
@@ -497,6 +523,8 @@ function renderConversion() {
   } else {
     // empty, invalid or no rate: never leave a stale number standing
     drivenInput.value = "";
+    if (sourceInput.value && parsed.valid && !rate && status !== "loading" && status !== "refreshing")
+      drivenError.textContent = "NO RATE";
   }
 
   paintFields();
@@ -509,40 +537,64 @@ function shortReason(reason: string) {
   return "NUMBERS ONLY";
 }
 
-/** Keep only what can be part of a number, and at most 18 digits. */
+/** Keep only what can be part of a number: ≤ 12 whole digits, ≤ 18 in all. */
 function sanitize(input: HTMLInputElement) {
-  let digits = 0;
-  let cleaned = "";
-  for (const ch of input.value) {
+  const raw = input.value.replace(/[^\d.,\s\u00a0\u202f]/g, "");
+  // the last "." or "," followed by 1–2 or 4+ digits (or nothing) is the decimal point
+  const m = /^(.*?)([.,])(\d{0,2}|\d{4,})$/.exec(raw);
+  const whole = m ? m[1] : raw;
+  let wholeDigits = 0;
+  let cleanedWhole = "";
+  for (const ch of whole) {
     if (/\d/.test(ch)) {
-      if (digits >= 18) continue;
-      digits += 1;
-      cleaned += ch;
-    } else if (/[.,\s]/.test(ch)) {
-      cleaned += ch;
+      if (wholeDigits >= 12) continue;
+      wholeDigits += 1;
     }
+    cleanedWhole += ch;
   }
-  if (cleaned !== input.value) input.value = cleaned;
+  let cleaned = m ? `${cleanedWhole}${m[2]}${m[3].slice(0, Math.max(0, 18 - wholeDigits))}` : cleanedWhole;
+  if (cleaned === raw && raw === input.value) return;
+  if (!m && raw !== input.value) cleaned = cleanedWhole;
+  input.value = cleaned;
 }
 
-// Group typed amounts on blur (1250.5 → 1,250.5) where "," groups, so both
-// fields read alike; strip it again on focus. Skipped in "." grouping locales,
-// where "1.250" would be ambiguous.
-const groupSeparator =
-  new Intl.NumberFormat().formatToParts(1000).find((p) => p.type === "group")?.value ?? ",";
+// Typed amounts are reformatted on blur with the same locale formatter as the
+// computed side (1250.5 → 1,250.5 / 1 250,5 / 1.250,5), and stripped of
+// grouping on focus. In "." grouping locales a whole number stays ungrouped,
+// because "1.250" would be ambiguous when parsed back.
+const numberParts = new Intl.NumberFormat().formatToParts(1234.5);
+const groupSeparator = numberParts.find((p) => p.type === "group")?.value ?? ",";
+const decimalSeparator = numberParts.find((p) => p.type === "decimal")?.value ?? ".";
+const GROUP_CHARS = /[,\s\u00a0\u202f']/g;
+
 function groupOnBlur(input: HTMLInputElement) {
-  if (groupSeparator !== ",") return;
   const parsed = parseAmount(input.value);
-  if (!parsed.valid || !/^\d+(\.\d+)?$/.test(input.value.replace(/,/g, ""))) return;
+  if (!parsed.valid) return;
   const [int, frac] = parsed.normalized.split(".");
-  const grouped = new Intl.NumberFormat("en-US").format(BigInt(int));
-  input.value = frac ? `${grouped}.${frac}` : grouped;
+  const useGrouping = groupSeparator !== "." || Boolean(frac);
+  const grouped = new Intl.NumberFormat(undefined, { useGrouping }).format(BigInt(int));
+  input.value = frac ? `${grouped}${decimalSeparator}${frac}` : grouped;
   fitInput(input);
 }
 function ungroupOnFocus(input: HTMLInputElement) {
-  if (groupSeparator === "," && input.value.includes(",")) {
-    input.value = input.value.replace(/,/g, "");
+  let v = input.value;
+  if (groupSeparator === ".") {
+    // only strip "." groups when a "," decimal is present or there are several dots
+    if (v.includes(",") || (v.match(/\./g)?.length ?? 0) > 1) v = v.replace(/\./g, "");
+  } else if (groupSeparator === ",") {
+    v = v.replace(/,/g, "");
   }
+  v = v.replace(/[\s\u00a0\u202f']/g, "");
+  if (v !== input.value) {
+    input.value = v;
+    fitInput(input);
+  }
+}
+
+/** What COPY puts on the clipboard: the value as shown, minus grouping. */
+function copyValue(display: string) {
+  if (groupSeparator === ".") return display.replace(/\.(?=\d{3}(\D|$))/g, "").replace(/\s/g, "");
+  return display.replace(GROUP_CHARS, "");
 }
 
 /* ---------- status line ---------- */
@@ -612,13 +664,19 @@ function renderStatus() {
   byId("status-hint").textContent = hint;
   statusButton.setAttribute(
     "aria-label",
-    [label, byId("status-rate").textContent, when ? `updated ${when}` : "", hint || "Refresh rates"]
+    [
+      label,
+      byId("status-rate").textContent,
+      byId("status-inverse").textContent,
+      when ? `updated ${when}` : "",
+      hint || "Refresh rates",
+    ]
       .filter(Boolean)
       .join(". "),
   );
   statusButton.setAttribute("aria-busy", String(refreshing));
   byId("main-error").textContent = kind === "error" ? hint.replace(" · TAP TO RETRY", "") : "";
-  byId("settings-updated").textContent = when ? `UPDATED ${when}` : "";
+  byId("settings-updated").textContent = when;
 }
 
 /* ---------- rates ---------- */
@@ -689,6 +747,48 @@ function paintCurrencyPickerSelection() {
   });
 }
 
+const RECENTS_KEY = "deac-currency-recents-v1";
+function loadRecents(): string[] {
+  try {
+    const list = JSON.parse(localStorage.getItem(RECENTS_KEY) ?? "[]") as unknown;
+    return Array.isArray(list) ? list.filter((c): c is string => typeof c === "string" && !!getCurrency(c)) : [];
+  } catch {
+    return [];
+  }
+}
+function pushRecent(code: string) {
+  const list = [code, ...loadRecents().filter((c) => c !== code)].slice(0, 6);
+  try {
+    localStorage.setItem(RECENTS_KEY, JSON.stringify(list));
+  } catch {
+    /* non-fatal */
+  }
+}
+function renderRecents() {
+  const selected = currencyPickerTarget === "from" ? fromCode : toCode;
+  const codes = loadRecents().filter((c) => c !== selected).slice(0, 4);
+  byId("currency-recents").hidden = codes.length === 0 || Boolean(currencySearch.value.trim());
+  byId("currency-recents-row").innerHTML = codes
+    .map((c) => `<button type="button" class="recent-chip" data-code="${c}" aria-label="Recent: ${c} ${nameOf(c)}">${c}</button>`)
+    .join("");
+}
+
+/** Enter picks the best match: exact code, then code prefix, then name prefix, then anything. */
+function bestMatch(): string | undefined {
+  const q = currencySearch.value.trim().toLowerCase();
+  const visible = [...currencyPicker.querySelectorAll<HTMLButtonElement>(".currency-option:not([hidden])")];
+  const score = (b: HTMLButtonElement) => {
+    const code = (b.dataset.code ?? "").toLowerCase();
+    const name = getCurrency(b.dataset.code ?? "")?.name.toLowerCase() ?? "";
+    if (code === q) return 0;
+    if (code.startsWith(q)) return 1;
+    if (name.startsWith(q)) return 2;
+    if (name.includes(q)) return 3;
+    return 4;
+  };
+  return visible.sort((a, b) => score(a) - score(b))[0]?.dataset.code;
+}
+
 function filterCurrencies() {
   const q = currencySearch.value.trim().toLowerCase();
   let shown = 0;
@@ -701,8 +801,12 @@ function filterCurrencies() {
     });
     group.hidden = groupShown === 0;
     shown += groupShown;
+    const visible = group.querySelectorAll<HTMLButtonElement>(".currency-option:not([hidden])");
+    group.querySelectorAll(".currency-option").forEach((b) => b.classList.remove("is-last"));
+    visible[visible.length - 1]?.classList.add("is-last");
   });
   byId("currency-empty").hidden = shown > 0;
+  renderRecents();
 }
 
 function openCurrencyPicker(target: "from" | "to") {
@@ -729,6 +833,7 @@ function applyCurrencyPick(code: string) {
   const current = target === "from" ? fromCode : toCode;
   const other = target === "from" ? toCode : fromCode;
   closeCurrencyPicker();
+  pushRecent(code);
   if (code === current) return;
   if (code === other) {
     // Picking the other side's currency swaps the pair.
@@ -774,24 +879,29 @@ for (const input of [amount, result]) {
     if (isSource) {
       groupOnBlur(input);
       save();
+    } else {
+      renderConversion(); // restore the computed value's formatting
     }
   });
 }
 
-// Copy the computed amount (no grouping commas, so it pastes as a number).
+// Copy the computed amount as shown, minus grouping, so it pastes as a number.
 for (const [btnId, input] of [["amount-copy", amount], ["result-copy", result]] as const) {
   const btn = byId<HTMLButtonElement>(btnId);
+  let resetTimer = 0;
   btn.addEventListener("click", async () => {
-    const parsed = parseAmount(input.value);
-    if (!parsed.valid) return;
+    if (!input.value) return;
+    const code = input === amount ? fromCode : toCode;
+    window.clearTimeout(resetTimer);
     try {
-      await navigator.clipboard.writeText(parsed.normalized);
+      await navigator.clipboard.writeText(copyValue(input.value));
       btn.textContent = "COPIED";
-      byId("announce").textContent = `Copied ${input.value}`;
+      say(`Copied ${input.value} ${nameOf(code)}`);
     } catch {
       btn.textContent = "CAN'T COPY";
+      say("Couldn't copy");
     }
-    window.setTimeout(() => (btn.textContent = "COPY"), 1400);
+    resetTimer = window.setTimeout(() => (btn.textContent = "COPY"), 1400);
   });
 }
 
@@ -843,7 +953,14 @@ swapButton.addEventListener("click", () => {
   announce(`Now typing ${nameOf(source === "top" ? fromCode : toCode)}`);
 });
 swapButton.addEventListener("animationend", () => swapButton.classList.remove("is-flipping"));
-statusButton.addEventListener("click", () => void loadRates(true));
+statusButton.addEventListener("click", () => void refreshByUser());
+
+/** A refresh the user asked for, spoken when it lands. */
+async function refreshByUser() {
+  await loadRates(true);
+  if (status === "fresh" && table) say(`Rates updated, ${whenLabel(table.fetchedAt)}`);
+  else if (status === "error" || status === "offline") say("Couldn't update rates");
+}
 
 /* ---------- events: dialogs ---------- */
 
@@ -868,11 +985,13 @@ currencySearch.addEventListener("keydown", (event) => {
     return;
   }
   if (event.key !== "Enter") return;
-  const first = currencyPicker.querySelector<HTMLButtonElement>(".currency-option:not([hidden])");
-  if (first?.dataset.code) applyCurrencyPick(first.dataset.code);
+  // consume the key, or it re-activates the trigger that regains focus on close
+  event.preventDefault();
+  const code = bestMatch();
+  if (code) applyCurrencyPick(code);
 });
-byId("currency-picker-list").addEventListener("click", (event) => {
-  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".currency-option");
+currencyPicker.addEventListener("click", (event) => {
+  const btn = (event.target as HTMLElement).closest<HTMLButtonElement>(".currency-option, .recent-chip");
   if (!btn?.dataset.code) return;
   applyCurrencyPick(btn.dataset.code);
 });
@@ -911,7 +1030,7 @@ designDialog.querySelectorAll<HTMLButtonElement>("[data-preset]").forEach((btn) 
     if (id) commitTheme(getPresetTheme(id));
   });
 });
-byId("settings-refresh").addEventListener("click", () => void loadRates(true));
+byId("settings-refresh").addEventListener("click", () => void refreshByUser());
 
 wireSheet(debugPanel);
 byId("debug-open").addEventListener("click", () => {
@@ -1022,6 +1141,42 @@ if (!isTauri) {
   });
   byId("update-app").addEventListener("click", () => void updateSW(true));
 }
+
+/* ---------- large text ---------- */
+
+const TEXT_KEY = "deac-currency-large-text";
+/** iOS reports the Dynamic Type size through -apple-system-body (17px by default). */
+function systemPrefersLargeText() {
+  const probe = document.createElement("span");
+  probe.style.cssText = "font: -apple-system-body; position: absolute; visibility: hidden;";
+  document.body.append(probe);
+  const size = parseFloat(getComputedStyle(probe).fontSize);
+  probe.remove();
+  return Number.isFinite(size) && size >= 20;
+}
+function applyTextSize() {
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem(TEXT_KEY);
+  } catch {
+    /* ignore */
+  }
+  const large = stored === null ? systemPrefersLargeText() : stored === "on";
+  document.documentElement.dataset.text = large ? "large" : "normal";
+  byId("large-text").setAttribute("aria-checked", String(large));
+  fitInput(amount);
+  fitInput(result);
+}
+byId("large-text").addEventListener("click", () => {
+  const next = document.documentElement.dataset.text !== "large";
+  try {
+    localStorage.setItem(TEXT_KEY, next ? "on" : "off");
+  } catch {
+    /* ignore */
+  }
+  applyTextSize();
+});
+applyTextSize();
 
 new ResizeObserver(() => {
   fitInput(amount);
