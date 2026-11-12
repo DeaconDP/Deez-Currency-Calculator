@@ -14,3 +14,6 @@ Thumbs.db
 # storekit-ship build output and local App Store setup (has review contact details)
 /build/
 /store/
+
+# python
+__pycache__/

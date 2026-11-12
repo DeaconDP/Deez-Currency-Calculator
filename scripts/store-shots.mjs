@@ -1,6 +1,10 @@
-// App Store screenshots at the exact store sizes (WebKit, iOS build flags).
-// Usage: TAURI_ENV_PLATFORM=ios pnpm dev --port 5199 &  node scripts/store-shots.mjs [outRoot] [baseUrl]
-// Writes <outRoot>/iphone-6.9/*.jpg (1320x2868) and <outRoot>/ipad-13/*.jpg (2048x2732).
+// Store screenshots at the exact store sizes (WebKit, mobile build flags).
+// App Store: TAURI_ENV_PLATFORM=ios pnpm dev --port 5199 --strictPort &
+//            node scripts/store-shots.mjs [outRoot] [baseUrl]
+//   Writes <outRoot>/iphone-6.9/*.jpg (1320x2868) and <outRoot>/ipad-13/*.jpg (2048x2732).
+// Google Play: TAURI_ENV_PLATFORM=android pnpm dev --port 5199 --strictPort &
+//            node scripts/store-shots.mjs store/play/images http://127.0.0.1:5199/ play
+//   Writes <outRoot>/phone/*.jpg (1080x2160, exactly Play's 2:1 max; JPEG so no alpha).
 import { webkit } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -12,10 +16,16 @@ const ratesByBase = {
   ZAR: { USD: "0.0558", EUR: "0.0511", GBP: "0.0441", JPY: "8.62", ZAR: "1", BTC: "0.00000058", ETH: "0.0000171" },
 };
 
-const devices = [
-  { dir: "iphone-6.9", prefix: "iphone", width: 440, height: 956, scale: 3 },
-  { dir: "ipad-13", prefix: "ipad", width: 1024, height: 1366, scale: 2 },
-];
+const deviceSets = {
+  appstore: [
+    { dir: "iphone-6.9", prefix: "iphone", width: 440, height: 956, scale: 3, mobile: true },
+    { dir: "ipad-13", prefix: "ipad", width: 1024, height: 1366, scale: 2, mobile: false },
+  ],
+  play: [{ dir: "phone", prefix: "phone", width: 360, height: 720, scale: 3, mobile: true, extra: true }],
+};
+const set = process.argv[4] ?? "appstore";
+const devices = deviceSets[set];
+if (!devices) throw new Error(`unknown device set ${set}; use ${Object.keys(deviceSets).join(" or ")}`);
 
 const browser = await webkit.launch();
 for (const d of devices) {
@@ -24,7 +34,7 @@ for (const d of devices) {
   const context = await browser.newContext({
     viewport: { width: d.width, height: d.height },
     deviceScaleFactor: d.scale,
-    isMobile: d.prefix === "iphone",
+    isMobile: d.mobile,
     hasTouch: true,
     colorScheme: "dark",
     locale: "en-US",
@@ -70,6 +80,13 @@ for (const d of devices) {
   await page.locator("#design-open").click();
   await page.locator('[data-preset="soft"]').click();
   await shot("04-looks");
+  if (d.extra) {
+    // 5. the Arcade look on the main screen
+    await page.locator('[data-preset="neon"]').click();
+    await page.keyboard.press("Escape");
+    await shot("05-arcade");
+    await page.locator("#design-open").click();
+  }
   await page.locator('[data-preset="default"]').click();
   await page.keyboard.press("Escape");
 
