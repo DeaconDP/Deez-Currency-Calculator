@@ -7,3 +7,10 @@ src-tauri/target/
 *.log
 .DS_Store
 Thumbs.db
+
+# Agent scratch (App Store Connect automation, screenshots) - keep out of public repo
+.cursor/
+
+# storekit-ship build output and local App Store setup (has review contact details)
+/build/
+/store/

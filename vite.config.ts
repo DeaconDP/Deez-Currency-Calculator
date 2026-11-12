@@ -67,7 +67,8 @@ export default defineConfig({
     }),
   ],
   server: {
-    host: "127.0.0.1",
+    // Tauri iOS device builds set TAURI_DEV_HOST to the Mac LAN IP.
+    host: process.env.TAURI_DEV_HOST || "127.0.0.1",
     port: 5181,
     strictPort: true,
     headers: {
@@ -80,4 +81,6 @@ export default defineConfig({
     port: 4173,
     strictPort: true,
   },
+  clearScreen: false,
+  envPrefix: ["VITE_", "TAURI_"],
 });

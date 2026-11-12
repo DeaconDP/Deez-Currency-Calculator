@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "com.Worldbuildio.currencyconverter",
+  "productName": "DeacsCurrencyConverter",
+  "bundle": {
+    "iOS": {
+      "developmentTeam": "3825NK7CQ8",
+      "minimumSystemVersion": "15.0",
+      "bundleVersion": "5"
+    }
+  }
+}

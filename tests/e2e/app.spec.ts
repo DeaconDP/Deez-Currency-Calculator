@@ -36,13 +36,56 @@ test("opens with the default pair and converts without refetching on input", asy
 }) => {
   const mock = await mockCoinbase(page);
   await page.goto("/");
-  await expect(page.locator("#from")).toHaveValue("ZAR");
-  await expect(page.locator("#to")).toHaveValue("USD");
+  await expect(page.locator("#from-trigger")).toContainText("ZAR");
+  await expect(page.locator("#to-trigger")).toContainText("USD");
   await expect(page.locator("#result")).toHaveValue(/0[.,]0558/);
   const before = mock.requests;
   await page.locator("#amount").fill("2");
   await expect(page.locator("#result")).toHaveValue(/0[.,]1116/);
   expect(mock.requests).toBe(before);
+});
+
+test("currency picker lists many currencies and updates the pair", async ({
+  page,
+}) => {
+  await page.route("https://api.coinbase.com/**", async (route) => {
+    const url = route.request().url();
+    if (url.includes("currency=EUR")) {
+      await route.fulfill({
+        json: {
+          data: {
+            currency: "EUR",
+            rates: {
+              USD: "1.08",
+              ZAR: "19.5",
+              EUR: "1",
+              BTC: "0.00002",
+            },
+          },
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: zarRates });
+  });
+  await page.goto("/");
+  await page.locator("#from-trigger").click();
+  const picker = page.locator("#currency-picker");
+  await expect(picker).toBeVisible();
+  await expect(picker.getByRole("heading", { name: /from currency/i })).toBeVisible();
+  await expect(picker.locator(".currency-option")).toHaveCount(20);
+  await expect(picker.getByRole("button", { name: /USD US Dollar/i })).toBeVisible();
+  await expect(picker.getByRole("button", { name: /EUR Euro/i })).toBeVisible();
+  await expect(picker.getByRole("button", { name: /BTC Bitcoin/i })).toBeVisible();
+  await picker.getByRole("button", { name: /EUR Euro/i }).click();
+  await expect(picker).toBeHidden();
+  await expect(page.locator("#from-trigger")).toContainText("EUR");
+
+  await page.locator("#to-trigger").click();
+  await expect(picker).toBeVisible();
+  await expect(picker.getByRole("heading", { name: /to currency/i })).toBeVisible();
+  await picker.getByRole("button", { name: /BTC Bitcoin/i }).click();
+  await expect(page.locator("#to-trigger")).toContainText("BTC");
 });
 
 test("editing the bottom amount updates the top without refetching", async ({
@@ -55,6 +98,48 @@ test("editing the bottom amount updates the top without refetching", async ({
   await page.locator("#result").fill("1");
   await expect(page.locator("#amount")).toHaveValue(/17[.,]9211/);
   expect(mock.requests).toBe(before);
+});
+
+test("swap toggles between 1-from and 1-to modes", async ({ page }) => {
+  await mockCoinbase(page);
+  await page.goto("/");
+  await page.locator("#amount").fill("1");
+  await expect(page.locator("#result")).toHaveValue(/0[.,]0558/);
+  await page.locator("#swap").click();
+  await expect(page.locator("#from-trigger")).toContainText("ZAR");
+  await expect(page.locator("#to-trigger")).toContainText("USD");
+  await expect(page.locator("#result")).toHaveValue("1");
+  await expect
+    .poll(async () => {
+      const v = await page.locator("#amount").inputValue();
+      return Number(v.replace(/\s/g, "").replace(",", "."));
+    })
+    .toBeCloseTo(17.9211, 3);
+  await page.locator("#swap").click();
+  await expect(page.locator("#amount")).toHaveValue("1");
+  await expect(page.locator("#result")).toHaveValue(/0[.,]0558/);
+});
+
+test("swap keeps the typed amount and inverts the direction", async ({
+  page,
+}) => {
+  await mockCoinbase(page);
+  await page.goto("/");
+  await page.locator("#amount").fill("100");
+  await expect(page.locator("#result")).toHaveValue(/5[.,]58/);
+  await page.locator("#swap").click();
+  await expect(page.locator("#from-trigger")).toContainText("ZAR");
+  await expect(page.locator("#to-trigger")).toContainText("USD");
+  await expect(page.locator("#result")).toHaveValue("100");
+  await expect
+    .poll(async () => {
+      const v = await page.locator("#amount").inputValue();
+      return Number(v.replace(/[\s,]/g, ""));
+    })
+    .toBeCloseTo(1792.11, 1);
+  await page.locator("#swap").click();
+  await expect(page.locator("#amount")).toHaveValue("100");
+  await expect(page.locator("#result")).toHaveValue(/5[.,]58/);
 });
 
 test("shows labeled BTC and USDC donation QR codes on the tip screen", async ({
@@ -75,6 +160,15 @@ test("shows labeled BTC and USDC donation QR codes on the tip screen", async ({
   await expect(tip.getByText("usdc", { exact: true })).toBeVisible();
 });
 
+test("hides tip donations on App Store shell (?forceNoTips)", async ({
+  page,
+}) => {
+  await page.goto("/?forceNoTips=1");
+  await expect(page.locator("#tip-open")).toHaveCount(0);
+  await expect(page.locator("#tip-dialog")).toHaveCount(0);
+  await expect(page.getByAltText(/donation QR code/i)).toHaveCount(0);
+});
+
 test("toggles a debug log bottom sheet", async ({ page }) => {
   await page.goto("/");
   const panel = page.locator("#debug-panel");
@@ -92,48 +186,27 @@ test("toggles a debug log bottom sheet", async ({ page }) => {
   await expect(debugNav).toHaveAttribute("aria-pressed", "false");
 });
 
-test("shows status line with rate after rates load", async ({ page }) => {
-  await mockCoinbase(page);
-  await page.goto("/");
-  const status = page.locator("#status-line");
-  await expect(status).toBeVisible();
-  await expect(status).toContainText(/1 ZAR/i);
-  await expect(status).toContainText(/USD/i);
-  await expect(status).toContainText(/0[.,]0558/);
-});
-
-test("glance strip shows EUR and BTC defaults when ZAR to USD", async ({
+test("text inputs keep at least 16px font to avoid iOS focus zoom", async ({
   page,
 }) => {
   await mockCoinbase(page);
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  const strip = page.locator("#glance-strip");
-  await expect(strip).toBeVisible();
-  await expect(strip.locator(".glance-code", { hasText: "EUR" })).toBeVisible();
-  await expect(strip.locator(".glance-code", { hasText: "BTC" })).toBeVisible();
-  await expect(strip.locator(".glance-code", { hasText: "USD" })).toHaveCount(0);
+  const px = (id: string) =>
+    page.evaluate(
+      (el) => parseFloat(getComputedStyle(document.getElementById(el)!).fontSize),
+      id,
+    );
+  expect(await px("amount")).toBeGreaterThanOrEqual(16);
+  expect(await px("result")).toBeGreaterThanOrEqual(16);
+  expect(await px("design-background-hex")).toBeGreaterThanOrEqual(16);
 });
 
-test("bank fee 2.5% shrinks displayed USD result", async ({ page }) => {
+test("main page has no glance strip or bank fee", async ({ page }) => {
   await mockCoinbase(page);
   await page.goto("/");
-  await expect(page.locator("#result")).toHaveValue(/0[.,]0558/);
-  await page.locator(".extras summary").click();
-  await page.locator("#fee-percent").fill("2.5");
-  await expect(page.locator("#result")).toHaveValue(/0[.,]0544/);
-  await expect(page.locator("#status-line")).toContainText(/Fee 2\.5%/);
-});
-
-test("copy result button writes clipboard payload", async ({
-  page,
-  context,
-}) => {
-  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  await mockCoinbase(page);
-  await page.goto("/");
-  await expect(page.locator("#result")).toHaveValue(/0[.,]0558/);
-  await page.locator("#copy-result").click();
-  await expect(page.locator("#copy-result")).toHaveText(/Copied/i);
-  const text = await page.evaluate(() => navigator.clipboard.readText());
-  expect(text).toMatch(/0[.,]0558 USD/);
+  await expect(page.locator("#glance-strip")).toHaveCount(0);
+  await expect(page.locator(".extras")).toHaveCount(0);
+  await expect(page.locator("#fee-percent")).toHaveCount(0);
+  await expect(page.locator("#favorites")).toHaveCount(0);
 });
