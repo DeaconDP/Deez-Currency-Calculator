@@ -123,9 +123,42 @@ const closeIcon = pixelIcon(
 const checkIcon = pixelIcon(
   8,
   16,
-  [[6, 1, 1, 1], [5, 2, 2, 1], [4, 3, 2, 1], [0, 3, 1, 1], [0, 4, 2, 1], [1, 5, 4, 1], [2, 6, 2, 1]],
+  [[6, 1, 2, 1], [5, 2, 2, 1], [0, 3, 2, 1], [4, 3, 2, 1], [1, 4, 4, 1], [2, 5, 2, 1]],
   "icon-check",
 );
+const refreshIcon = pixelIcon(
+  8,
+  16,
+  [
+    [2, 1, 3, 1], [5, 0, 1, 1], [5, 1, 2, 1], [5, 2, 1, 1],
+    [1, 2, 1, 1], [0, 3, 1, 2], [1, 5, 1, 1], [2, 6, 4, 1], [6, 5, 1, 1], [7, 3, 1, 2],
+  ],
+  "icon-refresh",
+);
+
+/** Extra words people search by: symbols, countries, nicknames. */
+const SEARCH_ALIASES: Record<string, string> = {
+  ZAR: "r rand south africa sa",
+  USD: "$ dollar america united states us usa greenback",
+  EUR: "€ europe eurozone",
+  GBP: "£ pound sterling uk britain england",
+  AUD: "a$ australia aussie",
+  CAD: "c$ canada loonie",
+  CHF: "switzerland swiss",
+  CNY: "¥ china renminbi rmb yuan",
+  JPY: "¥ japan yen",
+  INR: "₹ india rupee",
+  NZD: "nz$ new zealand kiwi",
+  BRL: "r$ brazil",
+  BWP: "p botswana",
+  KES: "ksh kenya",
+  NGN: "₦ nigeria",
+  AED: "uae emirates dubai dirham",
+  BTC: "₿ bitcoin xbt sats",
+  ETH: "ether ethereum",
+  USDC: "stablecoin circle",
+  USDT: "stablecoin tether",
+};
 const rightIcon = pixelIcon(8, 16, [[2, 1, 1, 6], [3, 2, 1, 4], [4, 3, 1, 2]], "icon-right");
 
 /* ---------- markup ---------- */
@@ -139,7 +172,7 @@ const currencyPickerListMarkup = (["fiat", "crypto"] as const)
       .filter((c) => c.type === type)
       .map(
         (c) =>
-          `<button type="button" class="currency-option" data-code="${c.code}" data-search="${c.code.toLowerCase()} ${c.name.toLowerCase()}" aria-label="${c.code} ${c.name}">
+          `<button type="button" class="currency-option" data-code="${c.code}" data-search="${c.code.toLowerCase()} ${c.name.toLowerCase()} ${SEARCH_ALIASES[c.code] ?? ""}" aria-label="${c.code} ${c.name}">
             <span class="opt-code">${c.code}</span>
             <span class="opt-name">${upper(c.name)}</span>
             <span class="opt-tag" aria-hidden="true">SWAP</span>
@@ -180,13 +213,15 @@ const leg = (
 ) => `
   <div class="leg" data-leg="${which}">
     <div class="leg-head">
-      <span class="leg-label" id="${inputId}-label"><span class="leg-dir">${which === "top" ? "FROM" : "TO"}</span><span class="leg-name" id="${inputId}-name"></span></span>
-      <span id="${inputId}-error" class="field-error"></span>
+      <span class="leg-label" aria-hidden="true"><span class="leg-role" id="${inputId}-role"></span><span class="leg-name" id="${inputId}-name"></span></span>
+      <span class="leg-aside">
+        <span id="${inputId}-error" class="field-error"></span>
+        <button id="${inputId}-copy" class="copy-btn" type="button" hidden>COPY</button>
+      </span>
     </div>
     <div class="leg-row">
       <div class="well">
-        <span class="approx" aria-hidden="true">≈</span>
-        <input id="${inputId}" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" value="${value}" aria-describedby="${inputId}-error">
+        <input id="${inputId}" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" maxlength="28" placeholder="--" value="${value}" aria-describedby="${inputId}-error">
       </div>
       <button id="${triggerId}" class="currency-trigger" type="button" aria-haspopup="dialog" aria-controls="currency-picker">
         <span class="currency-trigger-code">${code}</span>
@@ -210,7 +245,7 @@ app.innerHTML = `
     }
     <header class="topbar">
       <div class="brand">
-        <img class="brand-mark" src="/sprites/btc-chart.png" alt="" width="32" height="32">
+        <span class="brand-mark" aria-hidden="true"></span>
         <h1 class="wordmark" aria-label="Deez Currency Calculator"><span class="wordmark-main">DEEZ</span><span class="wordmark-sub">CURRENCY CALC</span></h1>
       </div>
       <div class="topbar-actions">
@@ -232,6 +267,7 @@ app.innerHTML = `
           <span class="status-dot" aria-hidden="true"></span>
           <span id="status-label" class="status-label">LOADING</span>
           <span id="status-when" class="status-when"></span>
+          <span class="status-refresh" aria-hidden="true">${refreshIcon}</span>
         </span>
         <span id="status-rate" class="status-rate"></span>
         <span id="status-inverse" class="status-rate status-inverse"></span>
@@ -367,36 +403,72 @@ function syncCurrencyTriggers() {
   byId("result-name").textContent = upper(toCurrency?.name ?? toCode);
   fromTrigger.setAttribute(
     "aria-label",
-    `From currency: ${fromCode}${fromCurrency ? ` ${fromCurrency.name}` : ""}. Change`,
+    `Top currency: ${fromCode}${fromCurrency ? ` ${fromCurrency.name}` : ""}. Change`,
   );
   toTrigger.setAttribute(
     "aria-label",
-    `To currency: ${toCode}${toCurrency ? ` ${toCurrency.name}` : ""}. Change`,
+    `Bottom currency: ${toCode}${toCurrency ? ` ${toCurrency.name}` : ""}. Change`,
   );
-  amount.setAttribute("aria-label", `Amount in ${fromCurrency?.name ?? fromCode}`);
-  result.setAttribute("aria-label", `Amount in ${toCurrency?.name ?? toCode}`);
+  paintFields();
 }
 
-/** Typed field = bright; computed field = accent with ≈. Long numbers step down a size. */
+const nameOf = (code: string) => getCurrency(code)?.name ?? code;
+
+/** Fit the amount to its well: Press Start 2P is monospace, so 1 char = 1 em. */
+function fitInput(input: HTMLInputElement) {
+  const chars = Math.max(input.value.length, 1);
+  const width = input.clientWidth;
+  if (!width) return;
+  const size = chars * 24 <= width ? 24 : chars * 16 <= width ? 16 : 8;
+  input.dataset.size = String(size);
+}
+
+/**
+ * Roles follow the direction: the field you type in says YOU TYPE, the computed
+ * one says ≈ YOU GET in the accent colour. Labels stay true after a flip.
+ */
 function paintFields() {
-  const top = app.querySelector<HTMLElement>('[data-leg="top"]')!;
-  const bottom = app.querySelector<HTMLElement>('[data-leg="bottom"]')!;
-  top.classList.toggle("is-driven", source === "bottom");
-  bottom.classList.toggle("is-driven", source === "top");
-  for (const input of [amount, result]) {
-    input.classList.toggle("is-long", input.value.length > 11);
-  }
+  const legs = {
+    top: app.querySelector<HTMLElement>('[data-leg="top"]')!,
+    bottom: app.querySelector<HTMLElement>('[data-leg="bottom"]')!,
+  };
+  const drivenSide = source === "top" ? "bottom" : "top";
+  legs[source].classList.remove("is-driven");
+  legs[drivenSide].classList.add("is-driven");
+  byId(source === "top" ? "amount-role" : "result-role").textContent = "YOU TYPE";
+  byId(source === "top" ? "result-role" : "amount-role").textContent = "≈ YOU GET";
+  const typedCode = source === "top" ? fromCode : toCode;
+  const drivenCode = source === "top" ? toCode : fromCode;
+  const sourceInput = source === "top" ? amount : result;
+  const drivenInput = source === "top" ? result : amount;
+  sourceInput.setAttribute("aria-label", `You type, in ${nameOf(typedCode)}`);
+  drivenInput.setAttribute(
+    "aria-label",
+    `You get, in ${nameOf(drivenCode)}. Edit to convert the other way`,
+  );
+  swapButton.setAttribute("aria-label", `Flip: type in ${nameOf(drivenCode)} instead`);
+  swapButton.title = `Type in ${drivenCode} instead`;
+  byId(source === "top" ? "amount-copy" : "result-copy").hidden = true;
+  byId(source === "top" ? "result-copy" : "amount-copy").hidden = !drivenInput.value;
+  byId(source === "top" ? "result-copy" : "amount-copy").setAttribute(
+    "aria-label",
+    `Copy ${drivenInput.value} ${nameOf(drivenCode)}`,
+  );
+  fitInput(amount);
+  fitInput(result);
 }
 
 let announceTimer = 0;
-function announce() {
+/** Spoken summary — only after the user acts (typing, flipping, picking). */
+function announce(prefix = "") {
   window.clearTimeout(announceTimer);
   announceTimer = window.setTimeout(() => {
-    if (!amount.value || !result.value) return;
-    const from = getCurrency(fromCode)?.name ?? fromCode;
-    const to = getCurrency(toCode)?.name ?? toCode;
-    byId("announce").textContent = `${amount.value} ${from} is ${result.value} ${to}`;
-  }, 700);
+    const parts: string[] = [];
+    if (prefix) parts.push(prefix);
+    if (amount.value && result.value)
+      parts.push(`${amount.value} ${nameOf(fromCode)} is ${result.value} ${nameOf(toCode)}`);
+    if (parts.length) byId("announce").textContent = parts.join(". ");
+  }, prefix ? 150 : 700);
 }
 
 function renderConversion() {
@@ -409,37 +481,26 @@ function renderConversion() {
   const drivenError = byId(source === "top" ? "result-error" : "amount-error");
   const drivenCurrency = source === "top" ? toCurrency : fromCurrency;
   const parsed = parseAmount(sourceInput.value);
+  const invalid = Boolean(sourceInput.value && !parsed.valid);
 
   drivenError.textContent = "";
-  sourceError.textContent =
-    sourceInput.value && !parsed.valid ? shortReason(parsed.reason) : "";
-  sourceInput.closest(".well")!.classList.toggle(
-    "is-invalid",
-    Boolean(sourceInput.value && !parsed.valid),
-  );
+  sourceError.textContent = invalid && !parsed.valid ? shortReason(parsed.reason) : "";
+  sourceInput.closest(".well")!.classList.toggle("is-invalid", invalid);
   drivenInput.closest(".well")!.classList.remove("is-invalid");
 
-  if (!sourceInput.value) {
-    drivenInput.value = "";
-  } else if (parsed.valid && rate && drivenCurrency) {
+  if (sourceInput.value && parsed.valid && rate && drivenCurrency) {
     const mid =
       source === "top"
         ? calculate(parsed.normalized, rate)!
         : calculateInverse(parsed.normalized, rate)!;
     drivenInput.value = formatResult(mid, drivenCurrency);
-  } else if (!parsed.valid) {
-    // keep the last good value visible but dimmed while the input is fixed
   } else {
+    // empty, invalid or no rate: never leave a stale number standing
     drivenInput.value = "";
   }
-  drivenInput.closest(".well")!.classList.toggle(
-    "is-dim",
-    Boolean(sourceInput.value && !parsed.valid),
-  );
 
   paintFields();
   renderStatus();
-  announce();
   save();
 }
 
@@ -448,10 +509,40 @@ function shortReason(reason: string) {
   return "NUMBERS ONLY";
 }
 
-/** Strip anything that can't be part of a number as it's typed. */
+/** Keep only what can be part of a number, and at most 18 digits. */
 function sanitize(input: HTMLInputElement) {
-  const cleaned = input.value.replace(/[^\d.,\s]/g, "");
+  let digits = 0;
+  let cleaned = "";
+  for (const ch of input.value) {
+    if (/\d/.test(ch)) {
+      if (digits >= 18) continue;
+      digits += 1;
+      cleaned += ch;
+    } else if (/[.,\s]/.test(ch)) {
+      cleaned += ch;
+    }
+  }
   if (cleaned !== input.value) input.value = cleaned;
+}
+
+// Group typed amounts on blur (1250.5 → 1,250.5) where "," groups, so both
+// fields read alike; strip it again on focus. Skipped in "." grouping locales,
+// where "1.250" would be ambiguous.
+const groupSeparator =
+  new Intl.NumberFormat().formatToParts(1000).find((p) => p.type === "group")?.value ?? ",";
+function groupOnBlur(input: HTMLInputElement) {
+  if (groupSeparator !== ",") return;
+  const parsed = parseAmount(input.value);
+  if (!parsed.valid || !/^\d+(\.\d+)?$/.test(input.value.replace(/,/g, ""))) return;
+  const [int, frac] = parsed.normalized.split(".");
+  const grouped = new Intl.NumberFormat("en-US").format(BigInt(int));
+  input.value = frac ? `${grouped}.${frac}` : grouped;
+  fitInput(input);
+}
+function ungroupOnFocus(input: HTMLInputElement) {
+  if (groupSeparator === "," && input.value.includes(",")) {
+    input.value = input.value.replace(/,/g, "");
+  }
 }
 
 /* ---------- status line ---------- */
@@ -493,11 +584,11 @@ function renderStatus() {
       break;
     case "fresh":
       label = "LIVE";
-      hint = "TAP TO REFRESH";
+      hint = "";
       break;
     case "stale":
       label = "CACHED";
-      hint = "TAP TO REFRESH";
+      hint = "TAP TO UPDATE";
       break;
     case "offline":
       label = "OFFLINE";
@@ -521,7 +612,7 @@ function renderStatus() {
   byId("status-hint").textContent = hint;
   statusButton.setAttribute(
     "aria-label",
-    [label, byId("status-rate").textContent, when ? `updated ${when}` : "", hint]
+    [label, byId("status-rate").textContent, when ? `updated ${when}` : "", hint || "Refresh rates"]
       .filter(Boolean)
       .join(". "),
   );
@@ -588,7 +679,13 @@ function paintCurrencyPickerSelection() {
     const active = btn.dataset.code === selected;
     btn.setAttribute("aria-current", String(active));
     btn.classList.toggle("is-selected", active);
-    btn.classList.toggle("is-other", btn.dataset.code === other);
+    const isOther = btn.dataset.code === other;
+    btn.classList.toggle("is-other", isOther);
+    const c = getCurrency(btn.dataset.code ?? "");
+    btn.setAttribute(
+      "aria-label",
+      `${c?.code} ${c?.name}${isOther ? ", selecting swaps the pair" : ""}`,
+    );
   });
 }
 
@@ -642,12 +739,14 @@ function applyCurrencyPick(code: string) {
     toCode = code;
     syncCurrencyTriggers();
     renderConversion();
+    announce(`${nameOf(fromCode)} to ${nameOf(toCode)}`);
     if (!table?.rates[toCode]) void loadRates(true);
     return;
   }
   syncCurrencyTriggers();
   table = null;
   renderConversion();
+  announce(`${nameOf(fromCode)} to ${nameOf(toCode)}`);
   void loadRates();
 }
 
@@ -657,17 +756,60 @@ amount.addEventListener("input", () => {
   sanitize(amount);
   source = "top";
   renderConversion();
+  announce();
 });
 result.addEventListener("input", () => {
   sanitize(result);
   source = "bottom";
   renderConversion();
+  announce();
 });
 for (const input of [amount, result]) {
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter") input.blur();
   });
+  input.addEventListener("focus", () => ungroupOnFocus(input));
+  input.addEventListener("blur", () => {
+    const isSource = (source === "top" ? amount : result) === input;
+    if (isSource) {
+      groupOnBlur(input);
+      save();
+    }
+  });
 }
+
+// Copy the computed amount (no grouping commas, so it pastes as a number).
+for (const [btnId, input] of [["amount-copy", amount], ["result-copy", result]] as const) {
+  const btn = byId<HTMLButtonElement>(btnId);
+  btn.addEventListener("click", async () => {
+    const parsed = parseAmount(input.value);
+    if (!parsed.valid) return;
+    try {
+      await navigator.clipboard.writeText(parsed.normalized);
+      btn.textContent = "COPIED";
+      byId("announce").textContent = `Copied ${input.value}`;
+    } catch {
+      btn.textContent = "CAN'T COPY";
+    }
+    window.setTimeout(() => (btn.textContent = "COPY"), 1400);
+  });
+}
+
+// Touch taps shouldn't leave keyboard-style focus rings behind (e.g. on the
+// gear after a sheet closes); a hardware keyboard brings them back.
+document.addEventListener(
+  "pointerdown",
+  () => (document.documentElement.dataset.input = "touch"),
+  true,
+);
+document.addEventListener(
+  "keydown",
+  (event) => {
+    if (event.key === "Tab" || event.key.startsWith("Arrow"))
+      document.documentElement.dataset.input = "keys";
+  },
+  true,
+);
 // Tap anywhere outside a field to put the keyboard away.
 document.addEventListener("pointerdown", (event) => {
   const active = document.activeElement;
@@ -698,6 +840,7 @@ swapButton.addEventListener("click", () => {
   void swapButton.offsetWidth;
   swapButton.classList.add("is-flipping");
   renderConversion();
+  announce(`Now typing ${nameOf(source === "top" ? fromCode : toCode)}`);
 });
 swapButton.addEventListener("animationend", () => swapButton.classList.remove("is-flipping"));
 statusButton.addEventListener("click", () => void loadRates(true));
@@ -879,6 +1022,11 @@ if (!isTauri) {
   });
   byId("update-app").addEventListener("click", () => void updateSW(true));
 }
+
+new ResizeObserver(() => {
+  fitInput(amount);
+  fitInput(result);
+}).observe(amount);
 
 log("Application started");
 syncCurrencyTriggers();

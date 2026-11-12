@@ -175,6 +175,41 @@ export function saveDesignTheme(theme: DesignTheme) {
   }
 }
 
+const LOOK_EXTRAS: Partial<Record<DesignPresetId, Record<string, string>>> = {
+  default: {
+    "--edge": "#000000",
+    "--hi": "rgba(255, 255, 255, 0.16)",
+    "--lo": "rgba(0, 0, 0, 0.42)",
+    "--line": "rgba(255, 255, 255, 0.12)",
+    "--live": "#4be37a",
+    "--warn": "#ffb43f",
+  },
+  neon: {
+    "--edge": "#000000",
+    "--hi": "rgba(184, 255, 240, 0.18)",
+    "--lo": "rgba(0, 0, 0, 0.45)",
+    "--line": "rgba(184, 255, 240, 0.16)",
+    "--live": "#00ff88",
+    "--warn": "#ffcc00",
+  },
+  soft: {
+    "--edge": "#081808",
+    "--hi": "rgba(224, 248, 207, 0.16)",
+    "--lo": "rgba(8, 24, 8, 0.45)",
+    "--line": "rgba(196, 240, 74, 0.2)",
+    "--live": "#c4f04a",
+    "--warn": "#e0f8cf",
+  },
+  "high-contrast": {
+    "--edge": "#ffffff",
+    "--hi": "transparent",
+    "--lo": "transparent",
+    "--line": "rgba(255, 255, 255, 0.6)",
+    "--live": "#00ff66",
+    "--warn": "#ffff00",
+  },
+};
+
 /** Presets offered in Settings, with their display names. */
 export const LOOK_PRESETS: { id: Exclude<DesignPresetId, "custom">; label: string }[] = [
   { id: "default", label: "NIGHT" },
@@ -202,6 +237,11 @@ export function applyTheme(
   style.setProperty("--radius", `${t.radius}px`);
   style.setProperty("--space", String(t.space));
   style.setProperty("--control-height", `${t.controlHeight}px`);
+  // Per-look structure colours (edges, bevel light, dividers, live dot) so each
+  // palette re-skins the whole UI, not just the fills.
+  const extras = LOOK_EXTRAS[t.presetId] ?? LOOK_EXTRAS.default!;
+  for (const [name, value] of Object.entries(extras)) style.setProperty(name, value);
+  root.dataset.look = t.presetId;
   root.dataset.font = t.font;
   root.style.colorScheme =
     luminance(t.background) > 0.45 ? "light" : "dark";
