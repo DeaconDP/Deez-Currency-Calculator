@@ -339,12 +339,12 @@ test("pasting text with several numbers keeps the first one", async ({ page }) =
   await expect(page.locator("#result")).toHaveValue("69.78");
 });
 
-test("a 13th whole digit is refused with TOO LONG", async ({ page }) => {
+test("a 13th whole digit is refused with MAX LENGTH", async ({ page }) => {
   await mockCoinbase(page);
   await page.goto("/");
   await page.locator("#amount").fill("1234567890123");
   await expect(page.locator("#amount")).toHaveValue("123456789012");
-  await expect(page.locator("#amount-error")).toHaveText("TOO LONG");
+  await expect(page.locator("#amount-error")).toHaveText("MAX LENGTH");
   await page.locator("#amount").fill("12");
   await expect(page.locator("#amount-error")).toHaveText("");
 });

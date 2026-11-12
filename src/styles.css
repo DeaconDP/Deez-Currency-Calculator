@@ -308,6 +308,10 @@ button {
   color: var(--error);
 }
 
+.field-error.is-notice {
+  color: var(--warn);
+}
+
 .copy-btn {
   position: relative;
   height: 24px;
@@ -361,6 +365,12 @@ button {
 .well.is-invalid,
 .well.is-invalid:focus-within {
   border-color: var(--error);
+}
+
+/* hit the length limit: a notice, not an error */
+.well.is-limit,
+.well.is-limit:focus-within {
+  border-color: var(--warn);
 }
 
 .well input {

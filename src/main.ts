@@ -554,14 +554,17 @@ function renderConversion() {
   const previousError = sourceError.textContent;
   drivenError.textContent = "";
   sourceError.textContent = clipped
-    ? "TOO LONG"
+    ? "MAX LENGTH"
     : !parsed.valid && invalid
       ? shortReason(parsed.reason)
       : "";
   // VoiceOver doesn't re-read aria-describedby, so speak a new error once
   if (sourceError.textContent && sourceError.textContent !== previousError)
-    say(sourceError.textContent === "TOO LONG" ? "Too long" : "Numbers only");
-  sourceInput.closest(".well")!.classList.toggle("is-invalid", invalid || clipped);
+    say(sourceError.textContent === "MAX LENGTH" ? "Maximum length reached" : "Numbers only");
+  sourceInput.closest(".well")!.classList.toggle("is-invalid", invalid);
+  sourceInput.closest(".well")!.classList.toggle("is-limit", clipped);
+  sourceError.classList.toggle("is-notice", clipped);
+  drivenError.classList.remove("is-notice");
   drivenInput.closest(".well")!.classList.remove("is-invalid");
 
   if (sourceInput.value && parsed.valid && rate && drivenCurrency) {
@@ -583,7 +586,7 @@ function renderConversion() {
 }
 
 function shortReason(reason: string) {
-  if (/18 significant/.test(reason)) return "TOO LONG";
+  if (/18 significant/.test(reason)) return "MAX LENGTH";
   return "NUMBERS ONLY";
 }
 
