@@ -305,7 +305,7 @@ app.innerHTML = `
       <p id="main-error" class="sr-only" role="alert"></p>
       <p id="announce" class="sr-only" role="status" aria-live="polite"></p>
     </section>
-    <footer class="foot"><span>REAL MARKET RATE</span><span>YOUR CARD MAY CHARGE MORE</span><span>DATA: COINBASE</span></footer>
+    <footer class="foot"><span>REAL MARKET RATE</span><span>YOUR CARD MAY CHARGE MORE</span><span>DATA: COINBASE</span><span class="foot-credit">MADE BY <b>DEAC.ONLINE</b> @ <b>WORLDBUILD.IO</b></span></footer>
   </main>
   ${
     tipsAllowed
@@ -363,6 +363,7 @@ app.innerHTML = `
         <h3 id="about-label" class="group-label">ABOUT</h3>
         <div class="list">
           <div class="list-row is-static"><span class="row-title">VERSION</span><span class="row-value">${__APP_VERSION__}</span></div>
+          <div class="list-row is-static"><span class="row-title">MADE BY</span><span class="row-value">DEAC.ONLINE @ WORLDBUILD.IO</span></div>
           <button id="debug-open" class="list-row" type="button" aria-haspopup="dialog" aria-controls="debug-panel">
             <span class="row-title">DIAGNOSTICS</span>${rightIcon}
           </button>

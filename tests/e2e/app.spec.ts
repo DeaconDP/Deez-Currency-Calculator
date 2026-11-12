@@ -401,3 +401,11 @@ test("the tally animation never leaks an in-between value", async ({ page }) => 
   expect(state.copy).toBe("Copy 1,792.11 South African Rand");
   await expect(page.locator("#amount")).toHaveValue("1,792.11");
 });
+
+test("credits the maker on the main screen and in Settings", async ({ page }) => {
+  await mockCoinbase(page);
+  await page.goto("/");
+  await expect(page.locator(".foot")).toContainText("MADE BY DEAC.ONLINE @ WORLDBUILD.IO");
+  await page.locator("#design-open").click();
+  await expect(page.locator("#design-dialog")).toContainText("DEAC.ONLINE @ WORLDBUILD.IO");
+});

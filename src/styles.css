@@ -1480,3 +1480,13 @@ button.list-row:active {
       0 0 0 6px transparent;
   }
 }
+
+/* credits */
+.foot-credit {
+  margin-top: 8px;
+}
+
+.foot-credit b {
+  font-weight: 400;
+  color: var(--money);
+}
