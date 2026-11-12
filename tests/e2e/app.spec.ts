@@ -307,4 +307,30 @@ test.describe("comma-decimal locale (en-ZA)", () => {
     await expect(page.locator("#amount-error")).toHaveText("NUMBERS ONLY");
     await expect(page.locator("#result")).toHaveValue("");
   });
+
+  test("a pasted foreign-format price keeps its value", async ({ page }) => {
+    await mockCoinbase(page);
+    await page.goto("/");
+    await page.locator("#amount").fill("$1,250.50");
+    await expect(page.locator("#result")).toHaveValue("69,78"); // 1250.50 × 0.0558
+  });
+});
+
+test("pasted prices in either format keep their value (en-US)", async ({ page }) => {
+  await mockCoinbase(page);
+  await page.goto("/");
+  await page.locator("#amount").fill("€1.250,50");
+  await expect(page.locator("#result")).toHaveValue("69.78");
+  await page.locator("#amount").fill("R 1 250,50");
+  await expect(page.locator("#result")).toHaveValue("69.78");
+});
+
+test("a 13th whole digit is refused with TOO LONG", async ({ page }) => {
+  await mockCoinbase(page);
+  await page.goto("/");
+  await page.locator("#amount").fill("1234567890123");
+  await expect(page.locator("#amount")).toHaveValue("123456789012");
+  await expect(page.locator("#amount-error")).toHaveText("TOO LONG");
+  await page.locator("#amount").fill("12");
+  await expect(page.locator("#amount-error")).toHaveText("");
 });

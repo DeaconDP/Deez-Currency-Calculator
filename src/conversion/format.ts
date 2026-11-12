@@ -21,7 +21,11 @@ export function formatResult(
           : abs >= 1_000_000
             ? 0 // cents are noise at this size, and the number still fits
             : currency.decimals;
+  // money reads as money: 69.80, not 69.8 (fiat from 1 up to a million)
+  const minimumFractionDigits =
+    currency.type === "fiat" && abs >= 1 && abs < 1_000_000 ? currency.decimals : 0;
   return new Intl.NumberFormat(undefined, {
+    minimumFractionDigits,
     maximumFractionDigits,
     useGrouping: true,
   }).format(number);

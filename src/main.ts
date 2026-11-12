@@ -51,6 +51,7 @@ applyTheme(designTheme);
 let table: RateTable | null = null;
 let status: AppStatus = "loading";
 let lastError = "None";
+let lastFetchFailed = false;
 let requestDuration: number | null = null;
 let abortController: AbortController | null = null;
 let deferredInstall: BeforeInstallPromptEvent | null = null;
@@ -289,6 +290,7 @@ app.innerHTML = `
       <p id="main-error" class="sr-only" role="alert"></p>
       <p id="announce" class="sr-only" role="status" aria-live="polite"></p>
     </section>
+    <footer class="foot">MID-MARKET RATES · NO FEES ADDED · DATA: COINBASE</footer>
   </main>
   ${
     tipsAllowed
@@ -388,10 +390,38 @@ const tipDialog = tipsAllowed ? byId<HTMLDialogElement>("tip-dialog") : null;
 const designDialog = byId<HTMLDialogElement>("design-dialog");
 const designOpen = byId<HTMLButtonElement>("design-open");
 
-/** Select all on focus so a tap is ready to replace. */
+/**
+ * Select all on focus so a tap is ready to replace. The native highlight
+ * renders muddy over the pixel digits, so the well itself inverts instead
+ * (.is-replacing) until you type, tap again to place the caret, or leave.
+ */
 function selectAllOnFocus(input: HTMLInputElement) {
+  const well = input.closest(".well")!;
+  let focusing = false;
+  const markReplacing = () => {
+    input.select();
+    well.classList.toggle("is-replacing", Boolean(input.value));
+  };
+  let typed = false;
   input.addEventListener("focus", () => {
-    requestAnimationFrame(() => input.select());
+    focusing = true;
+    typed = false;
+    markReplacing();
+    // WebKit can drop a selection made during focus; redo it next frame,
+    // unless typing already started (it would swallow the first keystroke)
+    requestAnimationFrame(() => {
+      if (!typed && document.activeElement === input) markReplacing();
+    });
+  });
+  const stop = () => well.classList.remove("is-replacing");
+  input.addEventListener("input", () => {
+    typed = true;
+    stop();
+  });
+  input.addEventListener("blur", stop);
+  input.addEventListener("click", () => {
+    if (focusing) focusing = false; // the tap that focused it
+    else stop(); // a second tap places the caret
   });
   // Desktop browsers clear selection on mouseup after focus; keep it.
   input.addEventListener("mouseup", (event) => event.preventDefault());
@@ -522,7 +552,11 @@ function renderConversion() {
 
   const previousError = sourceError.textContent;
   drivenError.textContent = "";
-  sourceError.textContent = !parsed.valid && invalid ? shortReason(parsed.reason) : "";
+  sourceError.textContent = clipped
+    ? "TOO LONG"
+    : !parsed.valid && invalid
+      ? shortReason(parsed.reason)
+      : "";
   // VoiceOver doesn't re-read aria-describedby, so speak a new error once
   if (sourceError.textContent && sourceError.textContent !== previousError)
     say(sourceError.textContent === "TOO LONG" ? "Too long" : "Numbers only");
@@ -552,24 +586,48 @@ function shortReason(reason: string) {
   return "NUMBERS ONLY";
 }
 
-/** Keep only what can be part of a number: ≤ 12 whole digits, ≤ 18 in all. */
+/** Where the decimal point is, using the same rules as parseAmount (-1 if none). */
+function decimalIndex(raw: string): number {
+  const dot = raw.lastIndexOf(".");
+  const comma = raw.lastIndexOf(",");
+  if (dot >= 0 && comma >= 0) return Math.max(dot, comma); // "1.250,50" / "1,250.50"
+  const sep = dot >= 0 ? "." : comma >= 0 ? "," : null;
+  if (!sep) return -1;
+  if (sep === decimalSeparator) return raw.lastIndexOf(sep);
+  const parts = raw.replace(/[\s\u00a0\u202f'’]/g, "").split(sep);
+  const grouped =
+    /^\d{1,3}$/.test(parts[0]) && parts[0] !== "0" && parts.slice(1).every((p) => /^\d{3}$/.test(p));
+  if (grouped) return -1;
+  return parts.length === 2 ? raw.lastIndexOf(sep) : -1;
+}
+
+let clipped = false;
+/**
+ * Keep only characters that can be part of a number and cap it at 12 whole
+ * digits / 18 in all. It never moves or rewrites separators, so a pasted
+ * "$1,250.50" or "€1.250,50" reaches the parser intact in any locale.
+ */
 function sanitize(input: HTMLInputElement) {
   const raw = input.value.replace(/[^\d.,\s\u00a0\u202f'’]/g, "").replace(/^\s+/, "");
-  const cut = raw.lastIndexOf(decimalSeparator);
-  const whole = cut >= 0 ? raw.slice(0, cut) : raw;
-  const frac = cut >= 0 ? raw.slice(cut + 1) : "";
-  let wholeDigits = 0;
-  let cleanedWhole = "";
-  for (const ch of whole) {
-    if (/\d/.test(ch)) {
-      if (wholeDigits >= 12) continue;
-      wholeDigits += 1;
+  const cut = decimalIndex(raw);
+  let whole = 0;
+  let total = 0;
+  let out = "";
+  [...raw].forEach((ch, i) => {
+    if (!/\d/.test(ch)) {
+      out += ch;
+      return;
     }
-    cleanedWhole += ch;
-  }
-  const cleanedFrac = frac.replace(/\D/g, "").slice(0, Math.max(0, 18 - wholeDigits));
-  const cleaned = cut >= 0 ? `${cleanedWhole}${decimalSeparator}${cleanedFrac}` : cleanedWhole;
-  if (cleaned !== input.value) input.value = cleaned;
+    const isWhole = cut < 0 || i < cut;
+    if (total >= 18 || (isWhole && whole >= 12)) {
+      clipped = true;
+      return;
+    }
+    if (isWhole) whole += 1;
+    total += 1;
+    out += ch;
+  });
+  if (out !== input.value) input.value = out;
 }
 
 /** Show a parsed amount the locale's way: grouped, with its decimal point. */
@@ -650,7 +708,7 @@ function renderStatus() {
       break;
     case "stale":
       label = "CACHED";
-      hint = "TAP TO UPDATE";
+      hint = lastFetchFailed ? "COULDN'T UPDATE · TAP TO RETRY" : "TAP TO UPDATE";
       break;
     case "offline":
       label = "OFFLINE";
@@ -685,7 +743,8 @@ function renderStatus() {
       .join(". "),
   );
   statusButton.setAttribute("aria-busy", String(refreshing));
-  byId("main-error").textContent = kind === "error" ? hint.replace(" · TAP TO RETRY", "") : "";
+  const alertText = kind === "error" ? hint.replace(" · TAP TO RETRY", "") : "";
+  if (byId("main-error").textContent !== alertText) byId("main-error").textContent = alertText;
   byId("settings-updated").textContent = when;
 }
 
@@ -725,9 +784,11 @@ async function loadRates(force = false) {
     await setCachedRates(loaded);
     status = "fresh";
     lastError = "None";
+    lastFetchFailed = false;
     log(`Loaded ${Object.keys(loaded.rates).length} valid rates`);
   } catch (error) {
     if (own.signal.aborted) return;
+    lastFetchFailed = true;
     lastError =
       error instanceof Error ? error.message : "Rates are temporarily unavailable.";
     if (table) status = navigator.onLine ? "stale" : "offline";
@@ -869,12 +930,14 @@ function applyCurrencyPick(code: string) {
 /* ---------- events: converter ---------- */
 
 amount.addEventListener("input", () => {
+  clipped = false;
   sanitize(amount);
   source = "top";
   renderConversion();
   announce();
 });
 result.addEventListener("input", () => {
+  clipped = false;
   sanitize(result);
   source = "bottom";
   renderConversion();
@@ -970,7 +1033,7 @@ statusButton.addEventListener("click", () => void refreshByUser());
 async function refreshByUser() {
   await loadRates(true);
   if (status === "fresh" && table) say(`Rates updated, ${whenLabel(table.fetchedAt)}`);
-  else if (status === "error" || status === "offline") say("Couldn't update rates");
+  else if (lastFetchFailed) say("Couldn't update rates");
 }
 
 /* ---------- events: dialogs ---------- */

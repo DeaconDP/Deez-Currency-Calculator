@@ -399,9 +399,19 @@ button {
   opacity: 0.6;
 }
 
-/* classic inverted retro highlight */
+/* the native highlight is muddy over pixel digits; the well inverts instead */
 .well input::selection {
+  background: transparent;
+  color: inherit;
+}
+
+.well.is-replacing {
   background: var(--money);
+  border-color: var(--money);
+}
+
+.well.is-replacing input,
+.leg.is-driven .well.is-replacing input {
   color: var(--on-money);
   text-shadow: none;
 }
@@ -549,11 +559,20 @@ button {
 .status-refresh {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
-  margin: -4px -4px -4px 4px;
-  color: var(--muted);
-  border: 2px solid var(--line);
+  width: 28px;
+  height: 28px;
+  margin: -6px -6px -6px 4px;
+  color: var(--text);
+  background: var(--control);
+  border: 2px solid var(--edge);
+  box-shadow:
+    inset 2px 2px 0 var(--hi),
+    inset -2px -2px 0 var(--lo);
+}
+
+.status[data-kind="error"] .status-refresh {
+  color: var(--error);
+  border-color: var(--error);
 }
 
 .status:active .status-refresh,
@@ -569,6 +588,7 @@ button {
 .status-rate {
   font-size: 16px;
   line-height: 24px;
+  color: var(--muted);
   overflow-wrap: anywhere;
 }
 
@@ -589,6 +609,14 @@ button {
 
 .status[data-kind="error"] .status-hint {
   color: var(--text);
+}
+
+.foot {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 2px solid var(--line);
+  color: var(--muted);
+  text-align: center;
 }
 
 /* ---------- sheets (dialogs) ---------- */
@@ -673,7 +701,8 @@ dialog.sheet::backdrop {
 
 .search-well input::placeholder {
   color: var(--muted);
-  opacity: 1;
+  opacity: 0.6;
+  text-shadow: none;
 }
 
 .search-well input::-webkit-search-cancel-button {
