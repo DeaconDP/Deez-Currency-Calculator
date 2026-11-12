@@ -224,7 +224,7 @@ const lookMarkup = LOOK_PRESETS.map(({ id, label }) => {
         <i style="background:${t.background}"></i><i style="background:${t.control}"></i><i style="background:${t.money}"></i>
       </span>
       <span class="look-name">${label}</span>
-      <span class="look-lcd" aria-hidden="true" style="background:${t.surface};color:${t.money};border-color:${t.control}">1.00</span>
+      <span class="look-lcd" aria-hidden="true" style="background:${t.surface};color:${t.money};border-color:${t.control}">69.78</span>
     </button>`;
 }).join("");
 
@@ -569,10 +569,11 @@ function announce(prefix = "") {
         : [result.value, toCode, amount.value, fromCode];
     if (typed && got) parts.push(`${typed} ${nameOf(typedCode)} is ${got} ${nameOf(gotCode)}`);
     if (parts.length) say(parts.join(". "));
-  }, prefix ? 150 : 700);
+  }, prefix ? 250 : 700);
 }
 
 function renderConversion() {
+  finishTally();
   const rate = table?.rates[toCode];
   const fromCurrency = getCurrency(fromCode);
   const toCurrency = getCurrency(toCode);
@@ -621,39 +622,51 @@ function renderConversion() {
   save();
 }
 
-/** After a flip, pick or refresh, the answer counts up like a game score. */
+/**
+ * After a flip, a pick, or a refresh you asked for, the answer counts up like a
+ * game score. Only the pixels animate: everything that reads the field (save,
+ * COPY, sats, VoiceOver) sees the final value, and any interaction finishes the
+ * count at once.
+ */
 let tallyNext = false;
 let tallyTimer = 0;
+let tallyDone: (() => void) | null = null;
 const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function finishTally() {
+  tallyDone?.();
+}
 function tally(
   input: HTMLInputElement,
   from: string,
   to: string,
   currency: NonNullable<ReturnType<typeof getCurrency>>,
 ) {
-  window.clearInterval(tallyTimer);
+  finishTally();
   const a = Number(from);
   const b = Number(to);
   const finalText = input.value;
   if (reduceMotion() || !Number.isFinite(a) || !Number.isFinite(b) || a === b) return;
+  if (document.activeElement === input) return; // never rewrite a field being edited
   const well = input.closest(".well")!;
   well.classList.add("is-tallying");
   let k = 0;
-  const step = () => {
-    k += 1;
-    if (k >= 5) {
-      window.clearInterval(tallyTimer);
-      input.value = finalText;
-      well.classList.remove("is-tallying");
-      fitInput(input);
-      return;
-    }
-    input.value = formatResult(String(a + ((b - a) * k) / 5), currency);
+  tallyDone = () => {
+    window.clearInterval(tallyTimer);
+    tallyDone = null;
+    input.value = finalText;
+    well.classList.remove("is-tallying");
     fitInput(input);
   };
-  step();
-  tallyTimer = window.setInterval(step, 40);
+  tallyTimer = window.setInterval(() => {
+    k += 1;
+    if (k >= 5) return finishTally();
+    input.value = formatResult(String(a + ((b - a) * k) / 5), currency);
+    fitInput(input);
+  }, 40);
 }
+// any touch, key or copy settles the number immediately
+document.addEventListener("pointerdown", finishTally, true);
+document.addEventListener("keydown", finishTally, true);
 
 function shortReason(reason: string) {
   if (/18 significant/.test(reason)) return "MAX LENGTH";
@@ -785,15 +798,22 @@ function renderStatus() {
       break;
     case "stale":
       label = "SAVED";
-      hint = lastFetchFailed
-        ? "COULDN'T UPDATE · TAP TO RETRY"
-        : age > 24 * 3_600_000
-          ? "OLD RATES · TAP TO UPDATE"
-          : "TAP TO UPDATE";
+      hint =
+        age > 24 * 3_600_000
+          ? lastFetchFailed
+            ? "OLD RATES · COULDN'T UPDATE"
+            : "OLD RATES · TAP TO UPDATE"
+          : lastFetchFailed
+            ? "COULDN'T UPDATE · TAP TO RETRY"
+            : "TAP TO UPDATE";
       break;
     case "offline":
       label = "OFFLINE";
-      hint = table ? "SHOWING SAVED RATES · TAP TO RETRY" : "NO SAVED RATES · TAP TO RETRY";
+      hint = !table
+        ? "NO SAVED RATES · TAP TO RETRY"
+        : age > 24 * 3_600_000
+          ? "OLD SAVED RATES · TAP TO RETRY"
+          : "SHOWING SAVED RATES · TAP TO RETRY";
       break;
     default:
       label = "NO RATES";
@@ -844,7 +864,7 @@ function rateLine(a: string, b: string, rate: string) {
 
 /* ---------- rates ---------- */
 
-async function loadRates(force = false) {
+async function loadRates(force = false, userAsked = false) {
   abortController?.abort();
   const own = new AbortController();
   abortController = own;
@@ -882,7 +902,7 @@ async function loadRates(force = false) {
     status = "fresh";
     lastError = "None";
     lastFetchFailed = false;
-    tallyNext = changed;
+    tallyNext = changed && userAsked;
     pingLive();
     log(`Loaded ${Object.keys(loaded.rates).length} valid rates`);
   } catch (error) {
@@ -923,7 +943,8 @@ function loadPairs(): [string, string][] {
 }
 function pushPair(a: string, b: string) {
   const key = `${a}>${b}`;
-  const list = [key, ...loadPairs().map(([x, y]) => `${x}>${y}`).filter((k) => k !== key)].slice(0, 6);
+  const reverse = `${b}>${a}`; // B→A is the same pair (the flip button covers direction)
+  const list = [key, ...loadPairs().map(([x, y]) => `${x}>${y}`).filter((k) => k !== key && k !== reverse)].slice(0, 6);
   try {
     localStorage.setItem(PAIRS_KEY, JSON.stringify(list));
   } catch {
@@ -931,22 +952,29 @@ function pushPair(a: string, b: string) {
   }
 }
 function renderPairs() {
-  const pairs = loadPairs()
-    .filter(([a, b]) => !(a === fromCode && b === toCode))
-    .slice(0, 4);
-  byId("pairs").hidden = pairs.length === 0;
+  const pairs = loadPairs().slice(0, 4);
+  const isCurrent = ([a, b]: [string, string]) =>
+    (a === fromCode && b === toCode) || (a === toCode && b === fromCode);
+  byId("pairs").hidden = pairs.filter((p) => !isCurrent(p)).length === 0;
+  const focusedKey = (document.activeElement as HTMLElement | null)?.dataset?.pair;
   byId("pairs-row").innerHTML = pairs
     .map(
-      ([a, b]) =>
-        `<button type="button" class="pair-chip" data-from="${a}" data-to="${b}" aria-label="${nameOf(a)} to ${nameOf(b)}"><span>${a}</span>${arrowIcon}<span>${b}</span></button>`,
+      (p) =>
+        `<button type="button" class="pair-chip" data-pair="${p[0]}>${p[1]}" data-from="${p[0]}" data-to="${p[1]}" aria-pressed="${isCurrent(p)}" aria-label="${nameOf(p[0])} to ${nameOf(p[1])}"><span>${p[0]}</span>${arrowIcon}<span>${p[1]}</span></button>`,
     )
     .join("");
+  // keep focus on the chip that was tapped (the row is rebuilt in place, same order)
+  if (focusedKey)
+    byId("pairs-row").querySelector<HTMLElement>(`[data-pair="${focusedKey}"]`)?.focus({ preventScroll: true });
 }
 /** Switch the pair (from a chip or the picker), remembering where you were. */
-function setPair(a: string, b: string) {
+function setPair(a: string, b: string, fromChip = false) {
   if (a === fromCode && b === toCode) return;
-  pushPair(fromCode, toCode);
-  pushPair(a, b);
+  if (!fromChip) {
+    // chips keep their order so they don't move under your finger
+    pushPair(fromCode, toCode);
+    pushPair(a, b);
+  }
   const baseChanged = a !== fromCode;
   fromCode = a;
   toCode = b;
@@ -1000,14 +1028,17 @@ function pushRecent(code: string) {
 }
 function renderRecents() {
   const selected = currencyPickerTarget === "from" ? fromCode : toCode;
-  const history = loadRecents();
-  // until there's history, offer the usual suspects
-  const codes = (history.length ? history : ["USD", "EUR", "GBP", "BTC"])
+  const other = currencyPickerTarget === "from" ? toCode : fromCode;
+  // history first, topped up with the usual suspects
+  const codes = [...new Set([...loadRecents(), "USD", "EUR", "GBP", "BTC"])]
     .filter((c) => c !== selected)
     .slice(0, 4);
   byId("currency-recents").hidden = codes.length === 0 || Boolean(currencySearch.value.trim());
   byId("currency-recents-row").innerHTML = codes
-    .map((c) => `<button type="button" class="recent-chip" data-code="${c}" aria-label="Recent: ${c} ${nameOf(c)}">${c}</button>`)
+    .map(
+      (c) =>
+        `<button type="button" class="recent-chip" data-code="${c}" aria-label="Recent: ${c} ${nameOf(c)}${c === other ? ", selecting trades places" : ""}">${c}</button>`,
+    )
     .join("");
 }
 
@@ -1064,7 +1095,7 @@ function filterCurrencies() {
 function openCurrencyPicker(target: "from" | "to") {
   currencyPickerTarget = target;
   const typing = (target === "from") === (source === "top");
-  currencyPickerTitle.textContent = typing ? "TYPE IN" : "CONVERT TO";
+  currencyPickerTitle.textContent = typing ? "YOU TYPE" : "YOU GET";
   currencySearch.value = "";
   filterCurrencies();
   paintCurrencyPickerSelection();
@@ -1227,7 +1258,7 @@ statusButton.addEventListener("click", () => void refreshByUser());
 
 /** A refresh the user asked for, spoken when it lands. */
 async function refreshByUser() {
-  await loadRates(true);
+  await loadRates(true, true);
   if (status === "fresh" && table) say(`Rates updated, ${whenLabel(table.fetchedAt)}`);
   else if (lastFetchFailed) say("Couldn't update rates");
 }
@@ -1248,7 +1279,7 @@ function wireSheet(dialog: HTMLDialogElement, onClose: () => void = () => dialog
 wireSheet(currencyPicker, closeCurrencyPicker);
 byId("pairs-row").addEventListener("click", (event) => {
   const chip = (event.target as HTMLElement).closest<HTMLButtonElement>(".pair-chip");
-  if (chip?.dataset.from && chip.dataset.to) setPair(chip.dataset.from, chip.dataset.to);
+  if (chip?.dataset.from && chip.dataset.to) setPair(chip.dataset.from, chip.dataset.to, true);
 });
 currencySearch.addEventListener("input", filterCurrencies);
 // with a hardware keyboard, typing a letter anywhere in the picker searches
@@ -1389,6 +1420,7 @@ window.addEventListener("offline", () => {
 });
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState !== "visible") return;
+  applyTextSize(); // the iOS text size may have changed meanwhile
   if (table && !isFresh(table.fetchedAt)) void loadRates();
   else renderStatus();
 });

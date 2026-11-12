@@ -32,6 +32,7 @@
   --on-money: #000;
   --dot: rgba(255, 255, 255, 0.05);
   --gutter: 16px;
+  --currency-col: 112px;
 
   color-scheme: dark;
   font-family: "Press Start 2P", ui-monospace, monospace;
@@ -313,9 +314,11 @@ button {
   height: 24px;
 }
 
+/* right-aligned under the amount, not under the currency button */
 .leg-sats {
   grid-area: sats;
   margin: 4px 0 0;
+  padding-right: calc(var(--currency-col) + 8px + 10px);
   text-align: right;
   color: var(--muted);
 }
@@ -561,6 +564,7 @@ button {
 .status-dot {
   width: 8px;
   height: 8px;
+  margin-right: 2px;
   background: var(--tone);
   box-shadow: 0 0 0 2px var(--edge);
 }
@@ -906,9 +910,8 @@ dialog.sheet::backdrop {
   text-align: left;
 }
 
-/* the chosen look is a latched (pressed-in) key */
+/* the chosen look: gold edge and a pressed-in bevel (no offset, so the grid stays aligned) */
 .look[aria-checked="true"] {
-  transform: translateY(4px);
   border-color: var(--money);
   box-shadow:
     inset 2px 2px 0 var(--lo),
@@ -1142,6 +1145,10 @@ button.list-row:active {
 /* ---------- larger screens ---------- */
 
 @media (max-width: 389px) {
+  :root {
+    --currency-col: 96px;
+  }
+
   .leg-row {
     grid-template-columns: minmax(0, 1fr) 96px;
   }
@@ -1208,11 +1215,14 @@ button.list-row:active {
 :root[data-text="large"] .leg-aside {
   align-self: end;
   height: auto;
+  min-height: 36px; /* DONE/COPY appearing never shifts the layout */
   margin-bottom: 8px;
 }
 
 :root[data-text="large"] .swap-cap {
-  font-size: 8px;
+  font-size: 16px;
+  line-height: 20px;
+  white-space: normal;
 }
 
 :root[data-text="large"] .copy-btn {
@@ -1264,14 +1274,15 @@ button.list-row:active {
 }
 
 .pairs-row {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px 8px;
   padding-bottom: 4px;
 }
 
 .pair-chip {
   display: inline-flex;
+  justify-content: center;
   align-items: center;
   gap: 8px;
   height: 44px;
@@ -1284,7 +1295,13 @@ button.list-row:active {
   box-shadow:
     inset 2px 2px 0 var(--hi),
     inset -2px -2px 0 var(--lo),
-    0 4px 0 var(--edge);
+    0 2px 0 var(--edge);
+}
+
+.pair-chip[aria-pressed="true"] {
+  border-color: var(--money);
+  box-shadow: inset 2px 2px 0 var(--lo);
+  transform: translateY(2px);
 }
 
 .pair-chip:active {
@@ -1301,13 +1318,15 @@ button.list-row:active {
 
 .foot {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px 16px;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 
 :root[data-text="large"] .foot span {
   white-space: normal;
+  text-align: center;
+  text-wrap: balance;
 }
 
 .done-btn {
@@ -1345,7 +1364,7 @@ button.list-row:active {
 
 .switch-text {
   position: absolute;
-  top: 6px;
+  top: 8px;
   font-size: 8px;
   line-height: 8px;
 }
@@ -1441,6 +1460,6 @@ button.list-row:active {
   to {
     box-shadow:
       0 0 0 2px var(--edge),
-      0 0 0 10px transparent;
+      0 0 0 6px transparent;
   }
 }

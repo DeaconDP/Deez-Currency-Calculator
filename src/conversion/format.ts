@@ -34,6 +34,6 @@ export function formatResult(
 export function formatRate(value: string): string {
   const number = Number(value);
   return new Intl.NumberFormat(undefined, {
-    maximumFractionDigits: Math.abs(number) < 0.01 ? 8 : 4,
+    maximumFractionDigits: Math.abs(number) < 0.01 ? 8 : Math.abs(number) >= 1000 ? 0 : 4,
   }).format(number);
 }
