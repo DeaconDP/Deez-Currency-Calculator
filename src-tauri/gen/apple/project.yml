@@ -54,7 +54,9 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         CFBundleShortVersionString: 1.0.3
-        CFBundleVersion: "4"
+        CFBundleVersion: "5"
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
         ITSAppUsesNonExemptEncryption: false
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
