@@ -10,49 +10,12 @@ const outDir = resolve(process.argv[2] ?? join(root, "store/play/images"));
 mkdirSync(outDir, { recursive: true });
 
 const dataUrl = (rel, mime) => `data:${mime};base64,${readFileSync(join(root, rel)).toString("base64")}`;
-const icon = dataUrl("public/icon-1024.png", "image/png");
 const font = dataUrl("public/fonts/PressStart2P-Regular.ttf", "font/ttf");
 const mark = dataUrl("public/sprites/btc-chart.png", "image/png");
 
 const browser = await chromium.launch();
 
-// --- icon: Play masks corners itself, so fill the source icon's transparent rounded corners with its own
-// background colour (sampled from the centre-left edge) and export a full-bleed square.
-{
-  const page = await browser.newPage({ viewport: { width: 512, height: 512 }, deviceScaleFactor: 1 });
-  await page.setContent(`<html><body style="margin:0"><canvas id="c" width="512" height="512"></canvas></body></html>`);
-  const png = await page.evaluate(async (src) => {
-    const img = new Image();
-    img.src = src;
-    await img.decode();
-    const probe = new OffscreenCanvas(1024, 1024).getContext("2d");
-    probe.drawImage(img, 0, 0);
-    const [r, g, b] = probe.getImageData(40, 512, 1, 1).data;
-    const canvas = document.getElementById("c");
-    const ctx = canvas.getContext("2d");
-    // Keep only the bright glyph: the source's rounded-rect edge stroke would otherwise show as a faint
-    // ring inside Play's own mask.
-    const glyph = new OffscreenCanvas(512, 512).getContext("2d");
-    glyph.imageSmoothingQuality = "high";
-    glyph.drawImage(img, 0, 0, 512, 512);
-    const px = glyph.getImageData(0, 0, 512, 512);
-    const d = px.data;
-    for (let i = 0; i < d.length; i += 4) {
-      // brightness as composited over the background (the edge stroke is bright but mostly transparent)
-      const v = r + (Math.max(d[i], d[i + 1], d[i + 2]) - r) * (d[i + 3] / 255);
-      const t = v > 110 ? (v - r) / (255 - r) : 0;
-      d[i] = r + (255 - r) * t;
-      d[i + 1] = g + (255 - g) * t;
-      d[i + 2] = b + (255 - b) * t;
-      d[i + 3] = 255;
-    }
-    ctx.putImageData(px, 0, 0);
-    // canvas PNG export keeps the alpha channel (RGBA, Play's "32-bit PNG"); a page screenshot drops it.
-    return canvas.toDataURL("image/png").split(",")[1];
-  }, icon);
-  writeFileSync(join(outDir, "icon-512.png"), Buffer.from(png, "base64"));
-  await page.close();
-}
+// The 512x512 Play icon is written by scripts/app-icon.mjs (full-bleed master; Play applies its own mask).
 
 // --- feature graphic
 {
